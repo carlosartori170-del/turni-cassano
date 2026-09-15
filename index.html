@@ -1,0 +1,1300 @@
+<!DOCTYPE html>
+<html lang="it">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>Nexus — Programmatore Appalto Cassano</title>
+<script src="https://cdn.jsdelivr.net/npm/@supabase/supabase-js@2"></script>
+<style>
+:root{
+  --p:#14532d;--pm:#166534;--pl:#22c55e;--acc:#e8a020;
+  --sfondo:#f0faf4;--bianco:#fff;--testo:#14532d;--grigio:#6b8f72;
+  --bordo:#bbf7d0;--verde:#15803d;--rosso:#b83228;--arancio:#c97010;
+  --blu:#1d4ed8;--viola:#7c3aed;
+  --mono:'Courier New',monospace;
+  --shadow:0 1px 4px rgba(0,0,0,0.08);
+}
+*{box-sizing:border-box;margin:0;padding:0;}
+body{font-family:'Segoe UI',system-ui,sans-serif;background:var(--sfondo);color:var(--testo);min-height:100vh;font-size:14px;}
+
+#app{display:none;}
+.auth-screen{min-height:100vh;display:flex;align-items:center;justify-content:center;padding:24px;background:linear-gradient(145deg,#f0faf4,#dcfce7);}
+.auth-card{width:min(420px,100%);background:#fff;border:1px solid var(--bordo);border-radius:14px;padding:24px;box-shadow:0 14px 40px rgba(20,83,45,.14);}
+.auth-card h2{margin-bottom:8px;color:var(--p);}.auth-card p{color:var(--grigio);line-height:1.45;margin-bottom:16px;}
+.auth-card .fg{margin-bottom:11px}.auth-card .btn{width:100%;justify-content:center;margin-top:5px;}
+.sync-state{font-size:.7rem;color:rgba(255,255,255,.8);white-space:nowrap;}
+header{background:var(--p);color:white;height:56px;display:flex;align-items:center;justify-content:space-between;padding:0 20px;position:sticky;top:0;z-index:200;box-shadow:0 2px 12px rgba(0,0,0,0.3);}
+.hlogo{display:flex;align-items:center;gap:10px;}
+.hlogo-icon{width:32px;height:32px;background:rgba(255,255,255,0.15);border-radius:7px;display:flex;align-items:center;justify-content:center;}
+.hlogo-icon svg{width:18px;height:18px;fill:none;stroke:white;stroke-width:2.2;}
+header h1{font-size:0.95rem;font-weight:800;letter-spacing:0.05em;text-transform:uppercase;}
+.hright{display:flex;align-items:center;gap:10px;}
+
+nav{background:var(--pm);display:flex;padding:0 16px;overflow-x:auto;gap:0;position:relative;z-index:50;}
+nav::-webkit-scrollbar{height:2px;}
+nav button{background:none;border:none;color:rgba(255,255,255,0.5);padding:12px 16px;font-size:0.78rem;font-weight:700;cursor:pointer;border-bottom:3px solid transparent;white-space:nowrap;transition:color 0.12s;display:flex;align-items:center;gap:6px;}
+nav button svg{width:15px;height:15px;fill:none;stroke:currentColor;stroke-width:2;}
+nav button:hover{color:rgba(255,255,255,0.85);}
+nav button.on{color:var(--acc);border-bottom-color:var(--acc);}
+
+main{padding:20px 16px;max-width:1200px;margin:0 auto;}
+.tab{display:none;}.tab.on{display:block;}
+
+.card{background:var(--bianco);border:1px solid var(--bordo);border-radius:10px;padding:18px;margin-bottom:16px;box-shadow:var(--shadow);}
+.ct{font-size:0.68rem;font-weight:800;color:var(--grigio);text-transform:uppercase;letter-spacing:0.08em;margin-bottom:14px;padding-bottom:8px;border-bottom:1px solid var(--sfondo);display:flex;align-items:center;gap:6px;}
+.ct svg{width:14px;height:14px;fill:none;stroke:var(--grigio);stroke-width:2;}
+
+.fg{display:flex;flex-direction:column;gap:4px;}
+.fg label{font-size:0.67rem;font-weight:700;color:var(--grigio);text-transform:uppercase;letter-spacing:0.05em;}
+.fg input,.fg select{border:1.5px solid var(--bordo);border-radius:6px;padding:8px 10px;font-size:0.88rem;color:var(--testo);background:var(--sfondo);transition:all 0.12s;}
+.fg input:focus,.fg select:focus{outline:none;border-color:var(--p);border-width:2px;background:#fffde8;}
+.g2{display:grid;grid-template-columns:repeat(2,1fr);gap:10px;}
+.g3{display:grid;grid-template-columns:repeat(3,1fr);gap:10px;}
+.g4{display:grid;grid-template-columns:repeat(4,1fr);gap:10px;}
+.ga{grid-column:1/-1;}
+
+.btn{padding:8px 16px;border:none;border-radius:6px;font-size:0.81rem;font-weight:700;cursor:pointer;transition:all 0.12s;display:inline-flex;align-items:center;gap:5px;}
+.btn svg{width:14px;height:14px;fill:none;stroke:currentColor;stroke-width:2.2;}
+.btn:hover{filter:brightness(0.92);}
+.bp{background:var(--p);color:white;}
+.bv{background:var(--verde);color:white;}
+.br{background:var(--rosso);color:white;padding:5px 10px;font-size:0.73rem;}
+.ba{background:var(--acc);color:var(--p);}
+.bo{background:transparent;border:1.5px solid var(--bordo);color:var(--testo);}
+.bo:hover{border-color:var(--pl);color:var(--verde);filter:none;}
+.bsm{padding:4px 10px;font-size:0.73rem;}
+
+.daytabs{display:flex;gap:4px;overflow-x:auto;margin-bottom:14px;border-bottom:1.5px solid var(--bordo);padding-bottom:0;}
+.daytab{background:none;border:none;color:var(--grigio);padding:8px 12px;font-size:0.76rem;font-weight:700;cursor:pointer;border-bottom:3px solid transparent;white-space:nowrap;border-radius:6px 6px 0 0;}
+.daytab:hover{background:var(--sfondo);color:var(--testo);}
+.daytab.on{color:var(--p);border-bottom-color:var(--p);background:var(--sfondo);}
+.turno2col{border-left:2px solid var(--bordo);}
+.turnigrid2 select,.turnigrid2 input{font-size:0.76rem;padding:3px 4px;border:1px solid var(--bordo);border-radius:4px;width:100%;min-width:78px;}
+.turnigrid2 td{padding:4px 3px;vertical-align:middle;}
+.turnigrid2 th{font-size:0.68rem;padding:5px 3px;white-space:nowrap;}
+.rigaassente input,.rigaassente select{opacity:0.35;pointer-events:none;}
+.brow{display:flex;gap:8px;margin-top:12px;flex-wrap:wrap;align-items:center;}
+
+.tw{overflow-x:auto;}
+table{width:100%;border-collapse:collapse;font-size:0.81rem;}
+th{background:var(--sfondo);color:var(--grigio);font-size:0.64rem;font-weight:800;text-transform:uppercase;letter-spacing:0.07em;padding:8px 10px;text-align:left;border-bottom:2px solid var(--bordo);white-space:nowrap;}
+td{padding:6px 8px;border-bottom:1px solid var(--bordo);vertical-align:middle;}
+tr:last-child td{border-bottom:none;}
+tr:hover td{background:#f5fbf7;}
+
+.pill{display:inline-block;padding:2px 9px;border-radius:20px;font-size:0.69rem;font-weight:700;}
+.pg{background:#d3f0e3;color:var(--verde);}
+.py{background:#fdefd3;color:var(--arancio);}
+.pb{background:#dbeafe;color:var(--blu);}
+.pr{background:#fde3e1;color:var(--rosso);}
+
+.alert{padding:9px 13px;border-radius:6px;font-size:0.82rem;font-weight:600;margin-bottom:12px;}
+.aok{background:#d3f0e3;color:var(--verde);border:1px solid #a5d9be;}
+.aerr{background:#fde3e1;color:var(--rosso);border:1px solid #f4b0ab;}
+.awarn{background:#fdefd3;color:var(--arancio);border:1px solid #f5d494;}
+
+#toast{position:fixed;bottom:20px;right:20px;z-index:999;padding:11px 18px;border-radius:8px;font-size:0.84rem;font-weight:600;box-shadow:0 4px 20px rgba(0,0,0,0.25);opacity:0;transform:translateY(8px);transition:opacity 0.2s,transform 0.2s;pointer-events:none;max-width:300px;color:white;}
+#toast.show{opacity:1;transform:translateY(0);}
+
+.empty{text-align:center;color:var(--grigio);padding:28px;font-size:0.84rem;}
+.loading{text-align:center;color:var(--grigio);padding:20px;font-size:0.82rem;}
+
+.stats{display:grid;grid-template-columns:repeat(auto-fill,minmax(130px,1fr));gap:10px;margin-bottom:16px;}
+.stat{background:var(--bianco);border:1px solid var(--bordo);border-radius:8px;padding:14px;text-align:center;}
+.stat .n{font-size:1.4rem;font-weight:900;color:var(--p);font-variant-numeric:tabular-nums;}
+.stat .l{font-size:0.63rem;color:var(--grigio);text-transform:uppercase;letter-spacing:0.05em;margin-top:3px;}
+.stat.warn .n{color:var(--arancio);}
+.stat.err .n{color:var(--rosso);}
+.cfg-note{font-size:.78rem;color:var(--grigio);margin:-4px 0 12px;line-height:1.45;}
+.cfg-section{border:1px solid var(--bordo);border-radius:8px;margin:10px 0;background:#fff;overflow:hidden;}
+.cfg-section summary{cursor:pointer;padding:11px 13px;font-weight:800;background:var(--sfondo);}
+.cfg-section .cfg-body{padding:12px;}
+.cfg-input{width:82px;padding:5px 7px;border:1px solid var(--bordo);border-radius:5px;color:var(--testo);}
+.cfg-time{width:105px;}
+.pdf-shift{display:inline-block;margin:2px 4px 2px 0;padding:4px 7px;border-radius:5px;background:#e8f5ed;border:1px solid var(--bordo);font-size:.72rem;white-space:nowrap;}
+.pdf-shift b{color:var(--p);}
+
+/* Griglia turni settimanale */
+.turnigrid{border-collapse:collapse;font-size:0.78rem;}
+.turnigrid th,.turnigrid td{border:1px solid var(--bordo);padding:4px 6px;}
+.turnigrid th{background:var(--sfondo);font-size:0.66rem;text-transform:uppercase;color:var(--grigio);}
+.turnigrid td.nome{font-weight:700;white-space:nowrap;background:#fafffa;position:sticky;left:0;}
+
+@media print{
+  header,nav,.no-print{display:none!important;}
+  main{max-width:100%;padding:0;}
+  body{background:white;}
+  .card{box-shadow:none;border:none;}
+}
+@media(max-width:640px){
+  .g4,.g3{grid-template-columns:1fr 1fr;}
+  .ga{grid-column:1/-1;}
+}
+</style>
+</head>
+<body>
+<div id="toast"></div>
+
+<div id="auth-screen" class="auth-screen">
+  <form class="auth-card" onsubmit="accediResponsabile(event)">
+    <h2>Programmatore Cassano</h2>
+    <p>Accesso riservato ai responsabili autorizzati. Le credenziali non vengono salvate nel file HTML.</p>
+    <div class="fg"><label>Email</label><input id="auth-email" type="email" autocomplete="username" required></div>
+    <div class="fg"><label>Password</label><input id="auth-password" type="password" autocomplete="current-password" required></div>
+    <button id="auth-submit" class="btn bp" type="submit">Accedi</button>
+    <div id="auth-msg" style="margin-top:12px;"></div>
+  </form>
+</div>
+
+<div id="app">
+  <header>
+    <div class="hlogo">
+      <div class="hlogo-icon">
+        <svg viewBox="0 0 24 24"><rect x="3" y="4" width="18" height="16" rx="2"/><path d="M3 9h18"/><path d="M8 3v3"/><path d="M16 3v3"/></svg>
+      </div>
+      <h1>Programmatore Appalto — Cassano Magnago</h1>
+    </div>
+    <div class="hright no-print"><span id="sync-state" class="sync-state"></span><button class="btn bo bsm" style="color:white;border-color:rgba(255,255,255,.45)" onclick="esciResponsabile()">Esci</button></div>
+  </header>
+  <nav class="no-print">
+    <button id="nav-config" class="on" onclick="showTab('config')">
+      <svg viewBox="0 0 24 24"><circle cx="12" cy="12" r="3"/><path d="M19.4 15a1.65 1.65 0 0 0 .33 1.82l.06.06a2 2 0 1 1-2.83 2.83l-.06-.06a1.65 1.65 0 0 0-1.82-.33 1.65 1.65 0 0 0-1 1.51V21a2 2 0 1 1-4 0v-.09A1.65 1.65 0 0 0 9 19.4a1.65 1.65 0 0 0-1.82.33l-.06.06a2 2 0 1 1-2.83-2.83l.06-.06a1.65 1.65 0 0 0 .33-1.82 1.65 1.65 0 0 0-1.51-1H3a2 2 0 1 1 0-4h.09A1.65 1.65 0 0 0 4.6 9a1.65 1.65 0 0 0-.33-1.82l-.06-.06a2 2 0 1 1 2.83-2.83l.06.06a1.65 1.65 0 0 0 1.82.33H9a1.65 1.65 0 0 0 1-1.51V3a2 2 0 1 1 4 0v.09a1.65 1.65 0 0 0 1 1.51 1.65 1.65 0 0 0 1.82-.33l.06-.06a2 2 0 1 1 2.83 2.83l-.06.06a1.65 1.65 0 0 0-.33 1.82V9a1.65 1.65 0 0 0 1.51 1H21a2 2 0 1 1 0 4h-.09a1.65 1.65 0 0 0-1.51 1z"/></svg>
+      Configurazione
+    </button>
+    <button id="nav-previsione" onclick="showTab('previsione')">
+      <svg viewBox="0 0 24 24"><rect x="3" y="4" width="18" height="18" rx="2"/><path d="M3 10h18"/><path d="M8 2v4"/><path d="M16 2v4"/></svg>
+      Previsione Ortofrutta
+    </button>
+    <button id="nav-appalto" onclick="showTab('appalto')">
+      <svg viewBox="0 0 24 24"><path d="M8 6h13M8 12h13M8 18h13"/><path d="M3 6h.01M3 12h.01M3 18h.01"/></svg>
+      Programmazione
+    </button>
+    <button id="nav-pdf" onclick="showTab('pdf')">
+      <svg viewBox="0 0 24 24"><path d="M4 4h16v16H4z"/><path d="M4 9h16M9 4v16"/></svg>
+      Bozza PDF SS38
+    </button>
+    <button id="nav-controllo" onclick="showTab('controllo')">
+      <svg viewBox="0 0 24 24"><path d="M21 16V8a2 2 0 0 0-1-1.73l-7-4a2 2 0 0 0-2 0l-7 4A2 2 0 0 0 3 8v8a2 2 0 0 0 1 1.73l7 4a2 2 0 0 0 2 0l7-4A2 2 0 0 0 21 16z"/><path d="M3.27 6.96L12 12.01l8.73-5.05"/><path d="M12 22.08V12"/></svg>
+      Colli Reali & Controllo
+    </button>
+  </nav>
+  <main id="mc"></main>
+</div>
+
+<script>
+const SB_URL='https://eqtyfnluswalfassmlxd.supabase.co';
+const SB_KEY='sb_publishable_QFxWloxs6waJCTvV1jtuPQ_MI7K4foM';
+const sb=supabase.createClient(SB_URL,SB_KEY);
+let SESSIONE_CASSANO=null;
+
+function projectIdValido(){return SB_URL==='https://eqtyfnluswalfassmlxd.supabase.co';}
+function responsabileAutorizzato(sessione){return sessione?.user?.app_metadata?.cassano_turni===true||sessione?.user?.app_metadata?.cassano_turni==='true';}
+function statoSync(testo){const el=document.getElementById('sync-state');if(el)el.textContent=testo||'';}
+
+// Costanti di dominio — reparto Ortofrutta (ID_Reparto 2) sul magazzino Cassano (ID_Magazzino 1)
+const ID_MAGAZZINO_CASSANO=1;
+const ID_REPARTO_ORTOFRUTTA=2;
+const ATTIVITA_PRODUTTIVITA={14:'Ricevimento',15:'Ventilazione',16:'Legaggio'};
+const ID_ATTIVITA_RICEVIMENTO=14;
+const ID_ATTIVITA_VENTILAZIONE=15;
+const ID_ATTIVITA_LEGAGGIO=16;
+let ID_ATTIVITA_NAVETTA=null; // trovato per nome nel catalogo Nexus, vedi caricaCatalogoAttivita
+const GIORNI=['Lunedì','Martedì','Mercoledì','Giovedì','Venerdì','Sabato','Domenica'];
+const ETICHETTE_TAB=[...GIORNI,'Lunedì +1'];
+const CONFIG_APPALTO_KEY='nexus_config_appalto_cassano_v2';
+const DEFAULT_CONFIG_APPALTO={
+  sogliaProduttivita:115,
+  ricevimento:[0,0,0,0,0,0,0],
+  carico:[31,41.5,41,42,48.5,57,63],
+  ceste:[
+    [['06:00','11:00'],['06:00','12:00'],['12:00','17:00'],['12:00','19:00'],['18:00','02:30'],['19:00','02:00']],
+    [['06:00','11:00'],['06:00','12:00'],['12:00','17:00'],['12:00','19:00'],['18:00','02:30'],['19:00','02:00']],
+    [['06:00','11:00'],['06:00','12:00'],['12:00','17:00'],['12:00','18:30'],['18:00','02:30'],['18:30','02:00']],
+    [['06:00','11:00'],['06:00','12:00'],['12:00','17:00'],['12:00','18:30'],['18:00','02:30'],['18:30','02:00']],
+    [['06:00','11:00'],['06:00','12:00'],['12:00','17:00'],['12:00','18:30'],['18:30','02:00'],['19:00','02:00']],
+    [['06:00','10:30'],['06:00','13:00'],['11:00','18:00'],['12:00','18:30'],['18:30','02:00'],['19:00','02:00']],
+    [['06:00','11:00'],['06:00','13:00'],['12:00','18:00'],['12:00','18:30'],['18:00','02:00'],['18:30','02:00']]
+  ],
+  forno:Array.from({length:7},(_,i)=>[[3,'08:00','15:00'],[i===6?0:1,i===5?'11:30':'12:00',i===5?'16:30':'17:00'],[1,'14:30','21:00'],[i===6?0:1,'15:00','19:00'],[3,'20:00','04:00']]),
+  vuoti:[[2,1,2,1,3,1,2,1,1,1],[3,1,3,1,3,1,1,1,1,1],[3,1,2,1,3,1,1,1,1,1],[3,1,3,1,3,1,1,1,1,1],[3,1,2,1,3,1,1,1,1,1],[3,1,3,1,3,1,1,1,1,1],[1,0,2,0,1,0,1,0,1,0]],
+  grocery:[[2,1,2,4],[3,1,2,3],[3,1,2,3],[3,1,2,3],[3,1,2,3],[0,0,3,4],[0,0,0,0]]
+};
+const VUOTI_MODELLI=[
+  ['Compattatori','06:00','12:30'],['Compattatori','15:30','19:30'],
+  ['Muletto','06:00','12:30'],['Muletto','15:30','19:30'],
+  ['Navetta','06:30','13:00'],['Navetta','15:30','19:30'],
+  ['Pane','06:00','12:30'],['Pane','15:30','19:30'],
+  ['Polimer','06:00','12:30'],['Pulizie','06:00','12:30']
+];
+const GROCERY_MODELLI=[
+  ['Ricevimento','06:00','12:30'],['Stoccaggio','06:00','12:30'],
+  ['Abbassamenti','06:00','12:30'],['Navettaggio','06:30','13:00']
+];
+DEFAULT_CONFIG_APPALTO.fabbisogni={
+  ceste:DEFAULT_CONFIG_APPALTO.ceste.map(g=>g.map(p=>({attivita:'Lavaggio ceste',inizio:p[0],fine:p[1],persone:1}))),
+  forno:DEFAULT_CONFIG_APPALTO.forno.map(g=>g.filter(p=>Number(p[0])>0).map(p=>({attivita:'Lavaggio forno',inizio:p[1],fine:p[2],persone:Number(p[0])}))),
+  vuoti:DEFAULT_CONFIG_APPALTO.vuoti.map(g=>g.map((n,i)=>({attivita:VUOTI_MODELLI[i][0],inizio:VUOTI_MODELLI[i][1],fine:VUOTI_MODELLI[i][2],persone:n})).filter(x=>x.persone>0)),
+  grocery:DEFAULT_CONFIG_APPALTO.grocery.map(g=>g.map((n,i)=>({attivita:GROCERY_MODELLI[i][0],inizio:GROCERY_MODELLI[i][1],fine:GROCERY_MODELLI[i][2],persone:n})).filter(x=>x.persone>0))
+};
+let CONFIG_APPALTO=caricaConfigAppaltoLocale();
+let CFG_GIORNO_FABB=0;
+let REPARTI=[]; // catalogo reparti Cassano (sola lettura da Nexus)
+let ATTIVITA_TUTTE=[]; // catalogo attività Cassano, con ID_Reparto (sola lettura da Nexus)
+
+let DIPENDENTI=[]; // cache dipendenti attivi Cassano
+
+function caricaConfigAppaltoLocale(){
+  try{
+    const salvata=JSON.parse(localStorage.getItem(CONFIG_APPALTO_KEY)||'{}'),cfg={...structuredClone(DEFAULT_CONFIG_APPALTO),...salvata};
+    cfg.fabbisogni={...structuredClone(DEFAULT_CONFIG_APPALTO.fabbisogni),...(salvata.fabbisogni||{})};
+    if(!salvata.fabbisogni?.ceste)cfg.fabbisogni.ceste=(cfg.ceste||DEFAULT_CONFIG_APPALTO.ceste).map(g=>g.map(p=>({attivita:'Lavaggio ceste',inizio:p[0],fine:p[1],persone:1})));
+    if(!salvata.fabbisogni?.forno)cfg.fabbisogni.forno=(cfg.forno||DEFAULT_CONFIG_APPALTO.forno).map(g=>g.filter(p=>Number(p[0])>0).map(p=>({attivita:'Lavaggio forno',inizio:p[1],fine:p[2],persone:Number(p[0])})));
+    return cfg;
+  }
+  catch(_){return structuredClone(DEFAULT_CONFIG_APPALTO);}
+}
+function impostaPercorso(obj,path,val){const parti=path.split('.');let nodo=obj;parti.slice(0,-1).forEach(p=>nodo=nodo[p]);nodo[parti.at(-1)]=val;}
+async function salvaConfigAppaltoLocale(){
+  aggiornaFabbisogniDaDom();
+  document.querySelectorAll('[data-config-path]').forEach(el=>impostaPercorso(CONFIG_APPALTO,el.dataset.configPath,el.type==='number'?Number(el.value):el.value));
+  localStorage.setItem(CONFIG_APPALTO_KEY,JSON.stringify(CONFIG_APPALTO));
+  if(!SESSIONE_CASSANO){toast('Configurazione salvata soltanto sul dispositivo: sessione non attiva.','warn');return;}
+  statoSync('Salvataggio configurazione…');
+  const{error}=await sb.from('ConfigurazioneCassano').upsert({ID_Magazzino:ID_MAGAZZINO_CASSANO,Dati:CONFIG_APPALTO,AggiornatoIl:new Date().toISOString(),AggiornatoDa:SESSIONE_CASSANO.user.id},{onConflict:'ID_Magazzino'});
+  if(error){statoSync('Errore di salvataggio');toast('Configurazione non salvata su Supabase: '+error.message,'err');return;}
+  statoSync('Configurazione sincronizzata');toast('Configurazione salvata su Supabase.');
+}
+function ripristinaConfigAppaltoLocale(){if(!confirm('Ripristinare tutti gli standard appalto ai valori iniziali?'))return;CONFIG_APPALTO=structuredClone(DEFAULT_CONFIG_APPALTO);localStorage.removeItem(CONFIG_APPALTO_KEY);renderConfigTab();}
+function inputCfg(path,value,tipo='number',step='1'){return `<input class="cfg-input ${tipo==='time'?'cfg-time':''}" type="${tipo}" step="${step}" value="${value}" data-config-path="${path}">`;}
+function minutiOra(ora){const[a,b]=String(ora||'00:00').split(':').map(Number);return a*60+b;}
+function oraMinuti(min){const giorno=min>=1440?' +1':'';min=((min%1440)+1440)%1440;return `${String(Math.floor(min/60)).padStart(2,'0')}:${String(min%60).padStart(2,'0')}${giorno}`;}
+function intervalloFabbisogno(r){const inizio=minutiOra(r.inizio);let fine=minutiOra(r.fine);if(fine<=inizio)fine+=1440;return{inizio,fine};}
+function opzioniAttivita(rep,val){
+  const elenco=rep==='vuoti'?['Compattatori','Muletto','Navetta','Pane','Polimer','Pulizie']:rep==='grocery'?['Ricevimento','Stoccaggio','Abbassamenti','Navettaggio']:rep==='ceste'?['Lavaggio ceste']:['Lavaggio forno'];
+  return elenco.map(x=>`<option value="${x}" ${x===val?'selected':''}>${x}</option>`).join('');
+}
+function righeFabbisognoHtml(rep){
+  const righe=CONFIG_APPALTO.fabbisogni[rep][CFG_GIORNO_FABB]||[];
+  return righe.map((r,i)=>`<tr data-fabb-riga data-rep="${rep}">
+    <td><select data-campo="attivita" style="padding:5px;border:1px solid var(--bordo);border-radius:5px;">${opzioniAttivita(rep,r.attivita)}</select></td>
+    <td><input class="cfg-input cfg-time" type="time" data-campo="inizio" value="${r.inizio}"></td>
+    <td><input class="cfg-input cfg-time" type="time" data-campo="fine" value="${r.fine}"></td>
+    <td><input class="cfg-input" type="number" min="1" step="1" data-campo="persone" value="${r.persone}"></td>
+    <td>${((intervalloFabbisogno(r).fine-intervalloFabbisogno(r).inizio)/60*r.persone).toFixed(1)} h</td>
+    <td><button class="btn br bsm" onclick="rimuoviFascia('${rep}',${i})">Elimina</button></td></tr>`).join('')||'<tr><td colspan="6" class="empty">Nessuna fascia richiesta.</td></tr>';
+}
+function grigliaMezzOreHtml(rep){
+  const righe=CONFIG_APPALTO.fabbisogni[rep][CFG_GIORNO_FABB]||[];
+  if(!righe.length)return '<div class="empty">Aggiungi una fascia per vedere la copertura.</div>';
+  const intervalli=righe.map(intervalloFabbisogno);
+  const da=Math.floor(Math.min(...intervalli.map(r=>r.inizio))/30)*30;
+  const a=Math.ceil(Math.max(...intervalli.map(r=>r.fine))/30)*30;
+  const slot=[];for(let m=da;m<a;m+=30)slot.push(m);
+  const att=[...new Set(righe.map(r=>r.attivita))];
+  return `<div class="tw"><table><thead><tr><th>Attività</th>${slot.map(m=>`<th>${oraMinuti(m)}</th>`).join('')}</tr></thead><tbody>${att.map(nome=>`<tr><td><b>${nome}</b></td>${slot.map(m=>{const n=righe.filter(r=>{const x=intervalloFabbisogno(r);return r.attivita===nome&&x.inizio<=m&&x.fine>m;}).reduce((s,r)=>s+Number(r.persone||0),0);return `<td style="text-align:center;background:${n?'#d3f0e3':'#fff'}">${n||'—'}</td>`;}).join('')}</tr>`).join('')}</tbody></table></div>`;
+}
+function editorRepartoHtml(rep,titolo){return `<div class="card" style="box-shadow:none;margin:10px 0;"><div class="ct">${titolo}</div><div class="tw"><table><thead><tr><th>Attività</th><th>Dalle</th><th>Alle</th><th>Persone contemporanee</th><th>Ore richieste</th><th></th></tr></thead><tbody>${righeFabbisognoHtml(rep)}</tbody></table></div><div class="brow"><button class="btn bo bsm" onclick="aggiungiFascia('${rep}')">＋ Aggiungi fascia</button><button class="btn bo bsm" onclick="aggiornaAnteprimaFabbisogni()">↻ Aggiorna anteprima</button><button class="btn bo bsm" onclick="copiaFabbisognoSettimana('${rep}')">Copia questo giorno su tutta la settimana</button></div><p class="cfg-note" style="margin-top:14px;">Anteprima automatica del fabbisogno ogni 30 minuti</p>${grigliaMezzOreHtml(rep)}</div>`;}
+function renderEditorFabbisogniHtml(){return `${editorRepartoHtml('ceste','Lavaggio ceste')}${editorRepartoHtml('forno','Lavaggio forno')}${editorRepartoHtml('vuoti','Vuoti')}${editorRepartoHtml('grocery','Grocery')}`;}
+function aggiornaFabbisogniDaDom(){
+  ['ceste','forno','vuoti','grocery'].forEach(rep=>{const nodi=[...document.querySelectorAll(`[data-fabb-riga][data-rep="${rep}"]`)];if(!nodi.length)return;CONFIG_APPALTO.fabbisogni[rep][CFG_GIORNO_FABB]=nodi.map(tr=>{const get=c=>tr.querySelector(`[data-campo="${c}"]`).value;return{attivita:get('attivita'),inizio:get('inizio'),fine:get('fine'),persone:Number(get('persone'))||1};});});
+}
+function cambiaGiornoFabb(v){aggiornaFabbisogniDaDom();CFG_GIORNO_FABB=Number(v);document.getElementById('cfg-fabbisogni-editor').innerHTML=renderEditorFabbisogniHtml();}
+function aggiornaAnteprimaFabbisogni(){aggiornaFabbisogniDaDom();document.getElementById('cfg-fabbisogni-editor').innerHTML=renderEditorFabbisogniHtml();}
+function aggiungiFascia(rep){aggiornaFabbisogniDaDom();const attivita=rep==='vuoti'?'Compattatori':rep==='grocery'?'Ricevimento':rep==='ceste'?'Lavaggio ceste':'Lavaggio forno';CONFIG_APPALTO.fabbisogni[rep][CFG_GIORNO_FABB].push({attivita,inizio:'06:00',fine:'12:30',persone:1});document.getElementById('cfg-fabbisogni-editor').innerHTML=renderEditorFabbisogniHtml();}
+function rimuoviFascia(rep,i){aggiornaFabbisogniDaDom();CONFIG_APPALTO.fabbisogni[rep][CFG_GIORNO_FABB].splice(i,1);document.getElementById('cfg-fabbisogni-editor').innerHTML=renderEditorFabbisogniHtml();}
+function copiaFabbisognoSettimana(rep){aggiornaFabbisogniDaDom();if(!confirm(`Copiare le fasce di ${rep} di ${GIORNI[CFG_GIORNO_FABB]} su tutti gli altri giorni?`))return;const modello=CONFIG_APPALTO.fabbisogni[rep][CFG_GIORNO_FABB];CONFIG_APPALTO.fabbisogni[rep]=GIORNI.map(()=>structuredClone(modello));toast('Fabbisogno copiato su tutta la settimana.');}
+function renderConfigAppaltoHtml(){
+  const carico=GIORNI.map((g,i)=>`<tr><td>${g}</td><td>${inputCfg(`carico.${i}`,CONFIG_APPALTO.carico[i],'number','0.5')} h</td></tr>`).join('');
+  const ricevimento=GIORNI.map((g,i)=>`<tr><td>${g}</td><td>${inputCfg(`ricevimento.${i}`,CONFIG_APPALTO.ricevimento?.[i]||0,'number','0.5')} h</td></tr>`).join('');
+  return `<div class="card"><div class="ct">Configurazione appalto — standard settimanali</div><div class="alert awarn">Bozza locale: questi valori restano nel browser e non vengono scritti su Supabase.</div>
+    <div class="fg"><label>Soglia produttività Ortofrutta</label><div>${inputCfg('sogliaProduttivita',CONFIG_APPALTO.sogliaProduttivita,'number','0.1')} colli/ora</div></div>
+    <details class="cfg-section"><summary>Ortofrutta — budget fisso Ricevimento</summary><div class="cfg-body"><p class="cfg-note">Ore totali standard per giornata, indipendenti dai colli ricevuti. Il valore 0 lascia il budget da definire.</p><div class="tw"><table><thead><tr><th>Giorno</th><th>Ore standard</th></tr></thead><tbody>${ricevimento}</tbody></table></div></div></details>
+    <details class="cfg-section" open><summary>Carico — ore totali giornaliere</summary><div class="cfg-body tw"><table><thead><tr><th>Giorno</th><th>Ore standard</th></tr></thead><tbody>${carico}</tbody></table></div></details>
+    <details class="cfg-section"><summary>Fabbisogni per fasce di 30 minuti — Ceste, Forno, Vuoti e Grocery</summary><div class="cfg-body"><p class="cfg-note">Tutti e quattro i reparti funzionano nello stesso modo: imposta fascia e persone contemporaneamente necessarie. Una posizione può essere coperta da più persone in successione; gli ingressi sfalsati restano visibili nella griglia.</p><div class="fg" style="max-width:220px;margin-bottom:12px;"><label>Giorno da configurare</label><select id="cfg-fabb-giorno" onchange="cambiaGiornoFabb(this.value)">${GIORNI.map((g,i)=>`<option value="${i}" ${i===CFG_GIORNO_FABB?'selected':''}>${g}</option>`).join('')}</select></div><div id="cfg-fabbisogni-editor">${renderEditorFabbisogniHtml()}</div></div></details>
+    <div class="brow"><button class="btn bp" onclick="salvaConfigAppaltoLocale()">💾 Salva configurazione</button><button class="btn bo" onclick="ripristinaConfigAppaltoLocale()">Ripristina standard</button></div></div>`;
+}
+
+function toast(msg,tipo){
+  const t=document.getElementById('toast');
+  t.textContent=msg;
+  t.style.background=tipo==='err'?'var(--rosso)':(tipo==='warn'?'var(--arancio)':'var(--verde)');
+  t.classList.add('show');
+  setTimeout(()=>t.classList.remove('show'),3000);
+}
+
+function mostraLogin(messaggio=''){
+  SESSIONE_CASSANO=null;document.getElementById('app').style.display='none';document.getElementById('auth-screen').style.display='flex';
+  document.getElementById('auth-msg').innerHTML=messaggio?`<div class="alert aerr">${messaggio}</div>`:'';
+}
+async function accediResponsabile(event){
+  event.preventDefault();if(!projectIdValido()){mostraLogin('Project ID Supabase non valido.');return;}
+  const pulsante=document.getElementById('auth-submit');pulsante.disabled=true;pulsante.textContent='Accesso…';
+  const email=document.getElementById('auth-email').value.trim(),password=document.getElementById('auth-password').value;
+  const{data,error}=await sb.auth.signInWithPassword({email,password});
+  pulsante.disabled=false;pulsante.textContent='Accedi';
+  if(error){mostraLogin('Accesso non riuscito: '+error.message);return;}
+  if(!responsabileAutorizzato(data.session)){await sb.auth.signOut();mostraLogin('Account valido ma non autorizzato al programmatore Cassano.');return;}
+  await avviaSessione(data.session);
+}
+async function esciResponsabile(){await sb.auth.signOut();mostraLogin('');}
+async function avviaSessione(sessione){
+  if(!projectIdValido()){mostraLogin('Project ID Supabase non valido.');return;}
+  if(!responsabileAutorizzato(sessione)){mostraLogin('Account non autorizzato al programmatore Cassano.');return;}
+  SESSIONE_CASSANO=sessione;document.getElementById('auth-screen').style.display='none';document.getElementById('app').style.display='block';statoSync(sessione.user.email||'Responsabile autorizzato');
+  await Promise.all([caricaDipendenti(),caricaCatalogoAttivita()]);
+  await caricaStatoCassanoSupabase();
+  showTab('config');
+}
+async function avviaApp(){
+  if(!projectIdValido()){mostraLogin('Project ID Supabase non valido.');return;}
+  const{data,error}=await sb.auth.getSession();
+  if(error||!data.session){mostraLogin();return;}
+  if(!responsabileAutorizzato(data.session)){await sb.auth.signOut();mostraLogin('La sessione presente non è autorizzata al programmatore Cassano.');return;}
+  await avviaSessione(data.session);
+}
+async function caricaDipendenti(){
+  const{data,error}=await sb.from('Dipendenti').select('*').eq('Attivo',true);
+  if(error){toast('Errore caricando dipendenti: '+error.message,'err');return;}
+  DIPENDENTI=(data||[]).filter(d=>{
+    const mag=d.Magazzini;
+    if(Array.isArray(mag))return mag.map(Number).includes(ID_MAGAZZINO_CASSANO);
+    return false;
+  }).sort((a,b)=>(a.Nome||'').localeCompare(b.Nome||''));
+}
+
+async function caricaCatalogoAttivita(){
+  const{data:rep,error:er}=await sb.from('Reparti').select('*').eq('ID_Magazzino',ID_MAGAZZINO_CASSANO);
+  if(er){toast('Errore caricando reparti: '+er.message,'err');return;}
+  REPARTI=(rep||[]).sort((a,b)=>(a.NomeReparto||'').localeCompare(b.NomeReparto||''));
+  const{data:att,error:ea}=await sb.from('Attivita').select('*').eq('ID_Magazzino',ID_MAGAZZINO_CASSANO);
+  if(ea){toast('Errore caricando attività: '+ea.message,'err');return;}
+  ATTIVITA_TUTTE=(att||[]).sort((a,b)=>(a.NomeAttivita||'').localeCompare(b.NomeAttivita||''));
+
+  // Cerco l'attività "Navetta" nel reparto Ortofrutta per nome (non ho un ID fisso come per le altre tre)
+  const navetta=ATTIVITA_TUTTE.find(a=>Number(a.ID_Reparto)===ID_REPARTO_ORTOFRUTTA&&/navett/i.test(String(a.NomeAttivita||a.Nome||a.Descrizione||'')));
+  ID_ATTIVITA_NAVETTA=navetta?Number(navetta.ID_Attivita):null;
+  if(!ID_ATTIVITA_NAVETTA)console.warn('Attività "Navetta" non trovata nel catalogo Ortofrutta di Nexus: il budget Navetta non potrà mostrare le ore piazzate.');
+}
+
+function showTab(id){
+  document.querySelectorAll('nav button').forEach(b=>b.classList.remove('on'));
+  document.getElementById('nav-'+id).classList.add('on');
+  if(id==='config')renderConfigTab();
+  else if(id==='previsione')renderPrevisioneTab();
+  else if(id==='appalto')renderProgrammazioneAppaltoTab();
+  else if(id==='pdf')renderTurniPdfTab();
+  else if(id==='controllo')renderControlloTab();
+}
+
+// Utility date — lunedì della settimana di una data qualsiasi
+function dataUtc(dataStr){const[y,m,d]=String(dataStr).split('-').map(Number);return new Date(Date.UTC(y,m-1,d));}
+function lunediSettimana(dataStr){
+  const d=dataUtc(dataStr);
+  const dow=d.getUTCDay()||7; // domenica JS=0 -> 7
+  d.setUTCDate(d.getUTCDate()-dow+1);
+  return d.toISOString().slice(0,10);
+}
+function addGiorni(dataStr,n){
+  const d=dataUtc(dataStr);
+  d.setUTCDate(d.getUTCDate()+n);
+  return d.toISOString().slice(0,10);
+}
+function fmtDataIt(dataStr){
+  const d=dataUtc(dataStr);
+  return d.toLocaleDateString('it-IT',{day:'2-digit',month:'2-digit',timeZone:'UTC'});
+}
+</script>
+
+<!-- Le funzioni delle singole schermate (renderConfigTab, renderPrevisioneTab, renderProgrammazioneTab, renderControlloTab) vengono aggiunte di seguito -->
+<script>
+async function renderConfigTab(){
+  document.getElementById('mc').innerHTML='<div class="loading">⏳ Caricamento...</div>';
+  const{data:obiettivi,error:e1}=await sb.from('ObiettiviAttivitaOrtofrutta').select('*');
+  if(e1){document.getElementById('mc').innerHTML=`<div class="alert aerr">Errore: ${e1.message}. Controlla la configurazione Supabase.</div>`;return;}
+  const obMap={};
+  (obiettivi||[]).forEach(o=>{obMap[o.ID_Attivita]=o;});
+
+  const valVent=obMap[ID_ATTIVITA_VENTILAZIONE]?obMap[ID_ATTIVITA_VENTILAZIONE].ObiettivoColliOra:'';
+
+  const{data:parametri}=await sb.from('ParametriOrtofrutta').select('*').eq('ID',1).maybeSingle();
+  const pctLegaggio=parametri?.PercentualeLegaggio??'';
+  const pctNavetta=parametri?.PercentualeNavetta??'';
+
+  document.getElementById('mc').innerHTML=`
+  ${renderConfigAppaltoHtml()}
+  <div class="card">
+    <div class="ct">Obiettivi di produttività</div>
+    <p style="font-size:0.8rem;color:var(--grigio);margin-bottom:10px;">Ventilazione indica le sole ore di Ventilazione pura. Legaggio e Navetta hanno budget separati; il Ricevimento utilizza le ore fisse giornaliere configurate sopra.</p>
+    <div class="tw"><table><tbody>
+      <tr><td>Ventilazione</td><td><input type="number" step="0.1" id="obiettivo-vent-inp" value="${valVent}" style="max-width:120px;padding:5px 8px;"> colli/ora</td></tr>
+    </tbody></table></div>
+    <div class="brow"><button class="btn bp bsm" onclick="salvaObiettivi()">💾 Salva obiettivi</button></div>
+  </div>
+  <div class="card">
+    <div class="ct">Budget ore Legaggio e Navetta</div>
+    <p style="font-size:0.8rem;color:var(--grigio);margin-bottom:10px;">Si calcolano da soli ogni giorno, come percentuale delle ore necessarie di Ventilazione di quel giorno (che dipendono dai colli previsti).</p>
+    <div class="tw"><table><tbody>
+      <tr><td>% Legaggio sulle ore necessarie di Ventilazione</td><td><input type="number" step="0.1" id="pct-legaggio-inp" value="${pctLegaggio}" style="max-width:120px;padding:5px 8px;"> %</td></tr>
+      <tr><td>% Navetta sulle ore necessarie di Ventilazione</td><td><input type="number" step="0.1" id="pct-navetta-inp" value="${pctNavetta}" style="max-width:120px;padding:5px 8px;"> %</td></tr>
+    </tbody></table></div>
+    <div class="brow"><button class="btn bp bsm" onclick="salvaParametriPercentuali()">💾 Salva percentuali</button></div>
+  </div>
+  <div id="config-msg"></div>`;
+}
+
+async function salvaDistribuzioneRicevimento(){
+  const inputs=document.querySelectorAll('.distrib-inp');
+  const righe=[...inputs].filter(i=>i.value!=='').map(i=>({GiornoIndice:parseInt(i.dataset.gi,10),Percentuale:parseFloat(i.value)||0}));
+  if(!righe.length){toast('Niente da salvare.','warn');return;}
+  const{error}=await sb.from('DistribuzioneRicevimentoOrtofrutta').upsert(righe,{onConflict:'GiornoIndice'});
+  document.getElementById('config-msg').innerHTML=error?`<div class="alert aerr">Errore: ${error.message}. Hai eseguito aggiorna_distribuzione_ricevimento.sql?</div>`:`<div class="alert aok">✔ Distribuzione salvata.</div>`;
+}
+
+async function salvaParametriPercentuali(){
+  const pctLeg=parseFloat(document.getElementById('pct-legaggio-inp').value)||0;
+  const pctNav=parseFloat(document.getElementById('pct-navetta-inp').value)||0;
+  const{error}=await sb.from('ParametriOrtofrutta').upsert([{ID:1,PercentualeLegaggio:pctLeg,PercentualeNavetta:pctNav}],{onConflict:'ID'});
+  document.getElementById('config-msg').innerHTML=error?`<div class="alert aerr">Errore: ${error.message}</div>`:`<div class="alert aok">✔ Percentuali salvate.</div>`;
+}
+
+async function salvaObiettivi(){
+  const valVent=parseFloat(document.getElementById('obiettivo-vent-inp').value)||0;
+  const{error}=await sb.from('ObiettiviAttivitaOrtofrutta').upsert([
+    {ID_Attivita:ID_ATTIVITA_VENTILAZIONE,NomeAttivita:'Ventilazione',ObiettivoColliOra:valVent}
+  ],{onConflict:'ID_Attivita'});
+  const msg=document.getElementById('config-msg');
+  msg.innerHTML=error?`<div class="alert aerr">Errore: ${error.message}</div>`:`<div class="alert aok">✔ Obiettivi salvati.</div>`;
+}
+
+</script>
+
+<script>
+function renderPrevisioneTab(){
+  const oggi=new Date().toISOString().slice(0,10);
+  const lun=lunediSettimana(oggi);
+  document.getElementById('mc').innerHTML=`
+  <div class="card">
+    <div class="ct">Previsione colli — settimana</div>
+    <div class="fg" style="max-width:220px;margin-bottom:14px;"><label>Lunedì della settimana</label>
+      <input type="date" id="prev-lun" value="${lun}" onchange="caricaPrevisioneSettimana()"></div>
+    <div id="prev-body"><div class="loading">⏳ Caricamento...</div></div>
+    <div class="brow"><button class="btn bp bsm" onclick="salvaPrevisione()">💾 Salva previsione</button></div>
+    <div id="prev-msg"></div>
+  </div>`;
+  caricaPrevisioneSettimana();
+}
+
+async function caricaPrevisioneSettimana(){
+  const lun=document.getElementById('prev-lun').value;
+  const giorni=[...Array(7)].map((_,i)=>addGiorni(lun,i));
+  const{data,error}=await sb.from('PrevisioneColliOrtofrutta').select('*').in('Data',giorni);
+  const map={};
+  (data||[]).forEach(r=>{map[r.Data]={of:r.ColliPrevisti,gro:r.ColliPrevistiGrocery};});
+  const righe=giorni.map((g,i)=>`
+    <tr>
+      <td>${GIORNI[i]} ${fmtDataIt(g)}</td>
+      <td><input type="number" step="1" data-data="${g}" data-rep="of" class="prev-inp" value="${map[g]?.of??''}" style="max-width:140px;"> colli</td>
+      <td><input type="number" step="1" data-data="${g}" data-rep="gro" class="prev-inp" value="${map[g]?.gro??''}" style="max-width:140px;"> colli</td>
+    </tr>`).join('');
+  document.getElementById('prev-body').innerHTML=`<div class="tw"><table><thead><tr><th>Giorno</th><th>Colli Ortofrutta</th><th>Colli Grocery</th></tr></thead><tbody>${righe}</tbody></table></div>`;
+}
+
+async function salvaPrevisione(){
+  const inputs=document.querySelectorAll('.prev-inp');
+  const perData={};
+  inputs.forEach(i=>{
+    if(i.value==='')return;
+    if(!perData[i.dataset.data])perData[i.dataset.data]={};
+    perData[i.dataset.data][i.dataset.rep]=parseFloat(i.value)||0;
+  });
+  const righe=Object.entries(perData).map(([data,v])=>({
+    Data:data,
+    ColliPrevisti:v.of??null,
+    ColliPrevistiGrocery:v.gro??null
+  }));
+  if(!righe.length){toast('Niente da salvare.','warn');return;}
+  const{error}=await sb.from('PrevisioneColliOrtofrutta').upsert(righe,{onConflict:'Data'});
+  document.getElementById('prev-msg').innerHTML=error?`<div class="alert aerr">Errore: ${error.message}</div>`:`<div class="alert aok">✔ Previsione salvata.</div>`;
+}
+</script>
+
+<script>
+async function renderControlloTab(){
+  const oggi=new Date().toISOString().slice(0,10);
+  const lun=lunediSettimana(oggi);
+  document.getElementById('mc').innerHTML=`
+  <div class="card">
+    <div class="ct">Colli reali & controllo produttività</div>
+    <div class="fg" style="max-width:220px;margin-bottom:14px;"><label>Lunedì della settimana</label>
+      <input type="date" id="ctrl-lun" value="${lun}" onchange="caricaControlloSettimana()"></div>
+    <div id="ctrl-body"><div class="loading">⏳ Caricamento...</div></div>
+    <div class="brow"><button class="btn bp bsm" onclick="salvaColliReali()">💾 Salva colli reali</button></div>
+    <div id="ctrl-msg"></div>
+  </div>`;
+  await caricaControlloSettimana();
+}
+
+async function caricaControlloSettimana(){
+  const lun=document.getElementById('ctrl-lun').value;
+  const giorni=[...Array(7)].map((_,i)=>addGiorni(lun,i));
+
+  const{data:obiettivi}=await sb.from('ObiettiviAttivitaOrtofrutta').select('*');
+  const obMap={};
+  (obiettivi||[]).forEach(o=>{obMap[o.ID_Attivita]=o.ObiettivoColliOra;});
+  const obiettivoVent=Number(obMap[ID_ATTIVITA_VENTILAZIONE])||0;
+
+  const{data:reali}=await sb.from('ColliRealiOrtofrutta').select('*').in('Data',giorni);
+  const realiMap={};
+  (reali||[]).forEach(r=>{realiMap[r.Data]=r.ColliReali;});
+
+  const{data:turni}=await sb.from('TurniOrtofruttaPianificati').select('*').in('Data',giorni).eq('ID_Attivita',ID_ATTIVITA_VENTILAZIONE);
+  const orePianMap={};
+  (turni||[]).forEach(t=>{orePianMap[t.Data]=(orePianMap[t.Data]||0)+(Number(t.OreTurno)||0);});
+
+  const righe=giorni.map((g,i)=>{
+    const colliReali=realiMap[g];
+    let oreNecessarie=null, delta=null;
+    if(obiettivoVent>0&&colliReali!=null&&colliReali!==''){
+      oreNecessarie=Number(colliReali)/obiettivoVent;
+      const orePian=orePianMap[g]||0;
+      delta=orePian-oreNecessarie;
+    }
+    return `<tr>
+      <td>${GIORNI[i]} ${fmtDataIt(g)}</td>
+      <td><input type="number" step="1" data-data="${g}" class="reali-inp" value="${colliReali??''}" style="max-width:120px;"></td>
+      <td>${oreNecessarie!=null?oreNecessarie.toFixed(1)+' h':'—'}</td>
+      <td>${orePianMap[g]!=null?orePianMap[g].toFixed(1)+' h':'—'}</td>
+      <td>${delta!=null?`<span class="pill ${delta>0?'py':(delta<0?'pr':'pg')}">${delta>0?'−':'+'}${Math.abs(delta).toFixed(1)} h ${delta>0?'da togliere':(delta<0?'da aggiungere':'in linea')}</span>`:'—'}</td>
+    </tr>`;
+  }).join('');
+
+  document.getElementById('ctrl-body').innerHTML=`
+    ${obiettivoVent<=0?'<div class="alert awarn">Imposta prima l\'obiettivo colli/ora della Ventilazione in Configurazione per vedere il calcolo delle ore.</div>':''}
+    <div class="tw"><table><thead><tr><th>Giorno</th><th>Colli reali</th><th>Ore necessarie</th><th>Ore pianificate (Ventilazione)</th><th>Delta</th></tr></thead><tbody>${righe}</tbody></table></div>`;
+}
+
+async function salvaColliReali(){
+  const inputs=document.querySelectorAll('.reali-inp');
+  const righe=[...inputs].filter(i=>i.value!=='').map(i=>({Data:i.dataset.data,ColliReali:parseFloat(i.value)||0}));
+  if(!righe.length){toast('Niente da salvare.','warn');return;}
+  const{error}=await sb.from('ColliRealiOrtofrutta').upsert(righe,{onConflict:'Data'});
+  document.getElementById('ctrl-msg').innerHTML=error?`<div class="alert aerr">Errore: ${error.message}</div>`:`<div class="alert aok">✔ Colli reali salvati.</div>`;
+  if(!error)caricaControlloSettimana();
+}
+</script>
+
+<script>
+function nomeReparto(r){
+  if(!r)return '';
+  return r.NomeReparto||r.Nome||r.Descrizione||('Reparto '+r.ID_Reparto);
+}
+function nomeAttivita(a){
+  if(!a)return '';
+  return a.NomeAttivita||a.Nome||a.Descrizione||('Attività '+a.ID_Attivita);
+}
+function attivitaDiReparto(idReparto){
+  if(!idReparto)return[];
+  return ATTIVITA_TUTTE.filter(a=>Number(a.ID_Reparto)===Number(idReparto));
+}
+function trovaAttivita(idAttivita){
+  return ATTIVITA_TUTTE.find(a=>Number(a.ID_Attivita)===Number(idAttivita));
+}
+
+const TURNI_PDF_SS38=[{"reparto":"Lavaggio ceste","nome":"Ghulam","giorni":[[],[{"inizio":"06:00","fine":"12:00","attivita":"Lavaggio ceste"}],[{"inizio":"06:00","fine":"12:00","attivita":"Lavaggio ceste"}],[{"inizio":"06:00","fine":"12:00","attivita":"Lavaggio ceste"}],[{"inizio":"06:00","fine":"12:00","attivita":"Lavaggio ceste"}],[{"inizio":"18:30","fine":"02:00","attivita":"Lavaggio ceste"}],[{"inizio":"18:30","fine":"02:00","attivita":"Lavaggio ceste"}]]},{"reparto":"Lavaggio ceste","nome":"Battipaglia","giorni":[[],[],[],[{"inizio":"06:00","fine":"11:00","attivita":"Lavaggio ceste"}],[{"inizio":"06:00","fine":"11:00","attivita":"Lavaggio ceste"}],[{"inizio":"11:00","fine":"18:00","attivita":"Lavaggio ceste"}],[{"inizio":"12:00","fine":"18:00","attivita":"Lavaggio ceste"}]]},{"reparto":"Lavaggio ceste","nome":"Javed Tabassum","giorni":[[{"inizio":"06:00","fine":"11:00","attivita":"Lavaggio ceste"}],[{"inizio":"12:00","fine":"19:00","attivita":"Lavaggio ceste"}],[{"inizio":"06:00","fine":"11:00","attivita":"Lavaggio ceste"}],[{"inizio":"18:30","fine":"02:00","attivita":"Lavaggio ceste"}],[{"inizio":"19:00","fine":"02:00","attivita":"Lavaggio ceste"}],[],[{"inizio":"06:00","fine":"11:00","attivita":"Lavaggio ceste"}]]},{"reparto":"Lavaggio ceste","nome":"Hassan Akgale","giorni":[[{"inizio":"06:00","fine":"12:00","attivita":"Lavaggio ceste"}],[],[{"inizio":"12:00","fine":"18:30","attivita":"Lavaggio ceste"}],[{"inizio":"12:00","fine":"18:30","attivita":"Lavaggio ceste"}],[{"inizio":"12:00","fine":"18:30","attivita":"Lavaggio ceste"}],[{"inizio":"12:00","fine":"18:30","attivita":"Lavaggio ceste"}],[{"inizio":"12:00","fine":"18:30","attivita":"Lavaggio ceste"}]]},{"reparto":"Lavaggio ceste","nome":"Farruk","giorni":[[{"inizio":"19:00","fine":"02:00","attivita":"Lavaggio ceste"}],[{"inizio":"19:00","fine":"02:00","attivita":"Lavaggio ceste"}],[{"inizio":"18:30","fine":"02:00","attivita":"Lavaggio ceste"}],[],[{"inizio":"18:30","fine":"02:00","attivita":"Lavaggio ceste"}],[{"inizio":"19:00","fine":"02:00","attivita":"Lavaggio ceste"}],[{"inizio":"18:00","fine":"02:00","attivita":"Lavaggio ceste"}]]},{"reparto":"Lavaggio ceste","nome":"Khan Sarwar","giorni":[[{"inizio":"18:00","fine":"02:30","attivita":"Lavaggio ceste"}],[{"inizio":"18:00","fine":"02:30","attivita":"Lavaggio ceste"}],[{"inizio":"18:00","fine":"02:30","attivita":"Lavaggio ceste"}],[{"inizio":"18:00","fine":"02:30","attivita":"Lavaggio ceste"}],[],[{"inizio":"06:00","fine":"13:00","attivita":"Lavaggio ceste"}],[{"inizio":"06:00","fine":"13:00","attivita":"Lavaggio ceste"}]]},{"reparto":"Lavaggio ceste","nome":"Alex","giorni":[[{"inizio":"10:00","fine":"12:00","attivita":"POLY. PAST LAV. CESTE"},{"inizio":"12:00","fine":"17:00","attivita":"POLY. PAST LAV. CESTE"}],[{"inizio":"10:00","fine":"12:00","attivita":"POLY. PAST LAV. CESTE"},{"inizio":"12:00","fine":"17:00","attivita":"POLY. PAST LAV. CESTE"}],[{"inizio":"10:00","fine":"12:00","attivita":"POLY. PAST LAV. CESTE"},{"inizio":"12:00","fine":"17:00","attivita":"POLY. PAST LAV. CESTE"}],[{"inizio":"10:00","fine":"12:00","attivita":"POLY. PAST LAV. CESTE"},{"inizio":"12:00","fine":"17:00","attivita":"POLY. PAST LAV. CESTE"}],[{"inizio":"10:00","fine":"12:00","attivita":"POLY. PAST LAV. CESTE"},{"inizio":"12:00","fine":"17:00","attivita":"POLY. PAST LAV. CESTE"}],[{"inizio":"06:00","fine":"10:30","attivita":"Lavaggio ceste"}],[]]},{"reparto":"Lavaggio ceste","nome":"Haider","giorni":[[{"inizio":"12:00","fine":"19:00","attivita":"Lavaggio ceste"}],[{"inizio":"06:00","fine":"11:00","attivita":"Lavaggio ceste"}],[],[{"inizio":"13:00","fine":"21:00","attivita":"FRUTTA"}],[{"inizio":"13:00","fine":"21:00","attivita":"FRUTTA"}],[{"inizio":"08:00","fine":"15:00","attivita":"Lavaggio forno"}],[{"inizio":"08:00","fine":"15:00","attivita":"Lavaggio forno"}]]},{"reparto":"Lavaggio forno","nome":"Tatiana","giorni":[[{"inizio":"12:00","fine":"17:00","attivita":"Lavaggio forno"}],[{"inizio":"12:00","fine":"17:00","attivita":"Lavaggio forno"}],[{"inizio":"12:00","fine":"17:00","attivita":"Lavaggio forno"}],[{"inizio":"12:00","fine":"17:00","attivita":"Lavaggio forno"}],[{"inizio":"12:00","fine":"17:00","attivita":"Lavaggio forno"}],[{"inizio":"11:30","fine":"16:30","attivita":"Lavaggio forno"}],[]]},{"reparto":"Lavaggio forno","nome":"Carlos","giorni":[[{"inizio":"14:30","fine":"21:00","attivita":"Lavaggio forno"}],[],[{"inizio":"14:30","fine":"21:00","attivita":"Lavaggio forno"}],[{"inizio":"14:30","fine":"21:00","attivita":"Lavaggio forno"}],[{"inizio":"14:30","fine":"21:00","attivita":"Lavaggio forno"}],[{"inizio":"14:30","fine":"21:00","attivita":"Lavaggio forno"}],[{"inizio":"14:30","fine":"21:00","attivita":"Lavaggio forno"}]]},{"reparto":"Lavaggio forno","nome":"Jamal","giorni":[[],[{"inizio":"08:00","fine":"15:00","attivita":"Lavaggio forno"}],[],[{"inizio":"08:00","fine":"15:00","attivita":"Lavaggio forno"}],[{"inizio":"08:00","fine":"15:00","attivita":"Lavaggio forno"}],[{"inizio":"08:00","fine":"15:00","attivita":"Lavaggio forno"}],[{"inizio":"08:00","fine":"15:00","attivita":"Lavaggio forno"}]]},{"reparto":"Lavaggio forno","nome":"Galmarini","giorni":[[{"inizio":"08:00","fine":"15:00","attivita":"Lavaggio forno"}],[{"inizio":"14:30","fine":"21:00","attivita":"Lavaggio forno"}],[{"inizio":"08:00","fine":"15:00","attivita":"Lavaggio forno"}],[],[{"inizio":"08:00","fine":"15:00","attivita":"Lavaggio forno"}],[],[]]},{"reparto":"Lavaggio forno","nome":"Mehedi All'Olander","giorni":[[],[{"inizio":"08:00","fine":"15:00","attivita":"Lavaggio forno"}],[{"inizio":"08:00","fine":"15:00","attivita":"Lavaggio forno"}],[{"inizio":"08:00","fine":"15:00","attivita":"Lavaggio forno"}],[{"inizio":"08:00","fine":"15:00","attivita":"Lavaggio forno"}],[{"inizio":"08:00","fine":"15:00","attivita":"Lavaggio forno"}],[{"inizio":"08:00","fine":"15:00","attivita":"Lavaggio forno"}]]},{"reparto":"Lavaggio forno","nome":"Hassan Agkale","giorni":[[{"inizio":"20:00","fine":"04:00","attivita":"Lavaggio forno"}],[{"inizio":"20:00","fine":"04:00","attivita":"Lavaggio forno"}],[{"inizio":"20:00","fine":"04:00","attivita":"Lavaggio forno"}],[{"inizio":"20:00","fine":"04:00","attivita":"Lavaggio forno"}],[{"inizio":"20:00","fine":"04:00","attivita":"Lavaggio forno"}],[{"inizio":"20:00","fine":"04:00","attivita":"Lavaggio forno"}],[]]},{"reparto":"Lavaggio forno","nome":"Sheikh Sharjeel","giorni":[[{"inizio":"20:00","fine":"04:00","attivita":"Lavaggio forno"}],[{"inizio":"20:00","fine":"04:00","attivita":"Lavaggio forno"}],[{"inizio":"21:00","fine":"04:00","attivita":"Lavaggio forno"}],[],[{"inizio":"20:00","fine":"04:00","attivita":"Lavaggio forno"}],[{"inizio":"20:00","fine":"04:00","attivita":"Lavaggio forno"}],[{"inizio":"20:00","fine":"04:00","attivita":"Lavaggio forno"}]]},{"reparto":"Lavaggio forno","nome":"Khan Wali","giorni":[[],[{"inizio":"21:00","fine":"04:00","attivita":"Lavaggio forno"}],[{"inizio":"20:00","fine":"04:00","attivita":"Lavaggio forno"}],[{"inizio":"20:00","fine":"04:00","attivita":"Lavaggio forno"}],[{"inizio":"20:00","fine":"04:00","attivita":"Lavaggio forno"}],[{"inizio":"20:00","fine":"04:00","attivita":"Lavaggio forno"}],[{"inizio":"20:00","fine":"04:00","attivita":"Lavaggio forno"}]]},{"reparto":"Lavaggio forno","nome":"Feruze","giorni":[[{"inizio":"08:00","fine":"15:00","attivita":"Lavaggio forno"}],[{"inizio":"08:00","fine":"15:00","attivita":"Lavaggio forno"}],[{"inizio":"08:00","fine":"15:00","attivita":"Lavaggio forno"}],[{"inizio":"08:00","fine":"15:00","attivita":"Lavaggio forno"}],[{"inizio":"06:00","fine":"14:00","attivita":"FRUTTA"}],[],[]]},{"reparto":"Lavaggio forno","nome":"Ilyas","giorni":[[{"inizio":"20:00","fine":"04:00","attivita":"Lavaggio forno"}],[{"inizio":"20:00","fine":"04:00","attivita":"Lavaggio forno"}],[{"inizio":"20:00","fine":"04:00","attivita":"Lavaggio forno"}],[{"inizio":"20:00","fine":"04:00","attivita":"Lavaggio forno"}],[],[],[{"inizio":"20:00","fine":"04:00","attivita":"Lavaggio forno"}]]},{"reparto":"Lavaggio forno","nome":"Haider","giorni":[[{"inizio":"12:00","fine":"18:00","attivita":"Lavaggio ceste"}],[{"inizio":"06:00","fine":"11:00","attivita":"Lavaggio ceste"}],[],[],[],[{"inizio":"08:00","fine":"15:00","attivita":"Lavaggio forno"}],[{"inizio":"08:00","fine":"15:00","attivita":"Lavaggio forno"}]]},{"reparto":"Lavaggio forno","nome":"Ali Asad (Multiservizi)","giorni":[[{"inizio":"15:00","fine":"19:00","attivita":"Lavaggio forno"}],[{"inizio":"15:00","fine":"19:00","attivita":"Lavaggio forno"}],[{"inizio":"15:00","fine":"19:00","attivita":"Lavaggio forno"}],[{"inizio":"15:00","fine":"19:00","attivita":"Lavaggio forno"}],[{"inizio":"15:00","fine":"19:00","attivita":"Lavaggio forno"}],[{"inizio":"15:00","fine":"19:00","attivita":"Lavaggio forno"}],[]]},{"reparto":"Lavaggio forno","nome":"Barry","giorni":[[{"inizio":"08:00","fine":"15:00","attivita":"Lavaggio forno"}],[],[],[],[],[],[]]},{"reparto":"Ricevimento Ortofrutta","nome":"Safi","giorni":[[{"inizio":"18:00","fine":"02:00","attivita":"Ricevimento Ortofrutta"}],[{"inizio":"20:00","fine":"02:00","attivita":"Ricevimento Ortofrutta"}],[{"inizio":"18:00","fine":"02:00","attivita":"Ricevimento Ortofrutta"}],[{"inizio":"18:00","fine":"02:00","attivita":"Ricevimento Ortofrutta"}],[{"inizio":"20:00","fine":"02:00","attivita":"Ricevimento Ortofrutta"}],[],[{"inizio":"13:00","fine":"20:00","attivita":"Ricevimento Ortofrutta"}]]},{"reparto":"Ricevimento Ortofrutta","nome":"Haroon","giorni":[[],[],[{"inizio":"10:00","fine":"17:00","attivita":"Ricevimento Ortofrutta"}],[{"inizio":"10:00","fine":"18:00","attivita":"Ricevimento Ortofrutta"}],[{"inizio":"10:00","fine":"18:00","attivita":"Ricevimento Ortofrutta"}],[{"inizio":"10:00","fine":"17:00","attivita":"Ricevimento Ortofrutta"}],[{"inizio":"14:00","fine":"20:00","attivita":"Ricevimento Ortofrutta"}]]},{"reparto":"Ricevimento Ortofrutta","nome":"Zafar","giorni":[[{"inizio":"18:00","fine":"02:00","attivita":"Ricevimento Ortofrutta"}],[{"inizio":"18:00","fine":"02:00","attivita":"Ricevimento Ortofrutta"}],[{"inizio":"18:00","fine":"02:00","attivita":"Ricevimento Ortofrutta"}],[{"inizio":"18:00","fine":"02:00","attivita":"Ricevimento Ortofrutta"}],[{"inizio":"18:00","fine":"02:00","attivita":"Ricevimento Ortofrutta"}],[],[{"inizio":"13:00","fine":"23:00","attivita":"Ricevimento Ortofrutta"}]]},{"reparto":"Ricevimento Ortofrutta","nome":"Gassalli Karim","giorni":[[{"inizio":"20:00","fine":"02:00","attivita":"Ricevimento Ortofrutta"}],[{"inizio":"18:00","fine":"02:00","attivita":"Ricevimento Ortofrutta"}],[{"inizio":"20:00","fine":"03:00","attivita":"Ricevimento Ortofrutta"}],[{"inizio":"20:00","fine":"03:00","attivita":"Ricevimento Ortofrutta"}],[{"inizio":"18:00","fine":"03:00","attivita":"Ricevimento Ortofrutta"}],[],[{"inizio":"16:00","fine":"24:00","attivita":"Ricevimento Ortofrutta"}]]},{"reparto":"Ricevimento Ortofrutta","nome":"Riaz","giorni":[[{"inizio":"10:00","fine":"18:00","attivita":"Ricevimento Ortofrutta"}],[{"inizio":"10:00","fine":"18:00","attivita":"Ricevimento Ortofrutta"}],[{"inizio":"10:00","fine":"18:00","attivita":"Ricevimento Ortofrutta"}],[{"inizio":"10:00","fine":"18:00","attivita":"Ricevimento Ortofrutta"}],[{"inizio":"10:00","fine":"18:00","attivita":"Ricevimento Ortofrutta"}],[{"inizio":"14:00","fine":"20:00","attivita":"Ricevimento Ortofrutta"}],[]]},{"reparto":"Ricevimento Ortofrutta","nome":"Khadim","giorni":[[{"inizio":"19:00","fine":"02:00","attivita":"Ricevimento Ortofrutta"}],[{"inizio":"19:00","fine":"02:00","attivita":"Ricevimento Ortofrutta"}],[{"inizio":"19:00","fine":"02:00","attivita":"Ricevimento Ortofrutta"}],[{"inizio":"19:00","fine":"02:00","attivita":"Ricevimento Ortofrutta"}],[{"inizio":"18:00","fine":"02:00","attivita":"Ricevimento Ortofrutta"}],[],[{"inizio":"19:00","fine":"02:00","attivita":"Ricevimento Ortofrutta"}]]},{"reparto":"Ricevimento Ortofrutta","nome":"Saqib","giorni":[[{"inizio":"18:00","fine":"02:00","attivita":"Ricevimento Ortofrutta"}],[{"inizio":"18:00","fine":"02:00","attivita":"Ricevimento Ortofrutta"}],[{"inizio":"18:00","fine":"02:00","attivita":"Ricevimento Ortofrutta"}],[{"inizio":"18:00","fine":"02:00","attivita":"Ricevimento Ortofrutta"}],[{"inizio":"17:00","fine":"02:00","attivita":"Ricevimento Ortofrutta"}],[],[{"inizio":"18:00","fine":"02:00","attivita":"Ricevimento Ortofrutta"}]]},{"reparto":"Ricevimento Ortofrutta","nome":"Aslam","giorni":[[{"inizio":"20:00","fine":"02:00","attivita":"Ricevimento Ortofrutta"}],[{"inizio":"20:00","fine":"02:00","attivita":"Ricevimento Ortofrutta"}],[{"inizio":"20:00","fine":"02:00","attivita":"Ricevimento Ortofrutta"}],[{"inizio":"20:00","fine":"02:00","attivita":"Ricevimento Ortofrutta"}],[{"inizio":"20:00","fine":"02:00","attivita":"Ricevimento Ortofrutta"}],[],[{"inizio":"14:00","fine":"22:00","attivita":"Ricevimento Ortofrutta"}]]},{"reparto":"Ricevimento Ortofrutta","nome":"Rrahman","giorni":[[{"inizio":"09:00","fine":"17:00","attivita":"Ricevimento Ortofrutta"}],[{"inizio":"09:00","fine":"17:00","attivita":"Ricevimento Ortofrutta"}],[{"inizio":"09:00","fine":"17:00","attivita":"Ricevimento Ortofrutta"}],[{"inizio":"09:00","fine":"17:00","attivita":"Ricevimento Ortofrutta"}],[{"inizio":"09:00","fine":"18:00","attivita":"Ricevimento Ortofrutta"}],[{"inizio":"09:00","fine":"16:00","attivita":"Ricevimento Ortofrutta"}],[]]},{"reparto":"Ortofrutta","nome":"Haider Sajjad","giorni":[[{"inizio":"08:00","fine":"15:00","attivita":"Lavaggio ceste"}],[{"inizio":"06:00","fine":"11:00","attivita":"Lavaggio ceste"}],[],[{"inizio":"13:00","fine":"21:00","attivita":"Ortofrutta"}],[{"inizio":"13:00","fine":"21:00","attivita":"Ortofrutta"}],[{"inizio":"08:00","fine":"15:00","attivita":"Lavaggio forno"}],[{"inizio":"08:00","fine":"15:00","attivita":"Lavaggio forno"}]]},{"reparto":"Ortofrutta","nome":"Sheik Al Amin","giorni":[[{"inizio":"13:00","fine":"21:00","attivita":"Ortofrutta"}],[],[{"inizio":"13:00","fine":"21:00","attivita":"Ortofrutta"}],[{"inizio":"13:00","fine":"21:00","attivita":"Ortofrutta"}],[{"inizio":"13:00","fine":"21:00","attivita":"Ortofrutta"}],[{"inizio":"10:00","fine":"19:00","attivita":"Ortofrutta"}],[{"inizio":"14:00","fine":"21:00","attivita":"Ortofrutta"}]]},{"reparto":"Ortofrutta","nome":"Coulibaly Alassane","giorni":[[{"inizio":"09:00","fine":"17:00","attivita":"Ortofrutta"}],[{"inizio":"09:00","fine":"16:00","attivita":"Ortofrutta"}],[{"inizio":"09:00","fine":"17:00","attivita":"Ortofrutta"}],[{"inizio":"09:00","fine":"18:00","attivita":"Ortofrutta"}],[{"inizio":"09:00","fine":"18:00","attivita":"Ortofrutta"}],[{"inizio":"10:00","fine":"19:00","attivita":"Ortofrutta"}],[]]},{"reparto":"Ortofrutta","nome":"Abdul Karim","giorni":[[{"inizio":"20:00","fine":"02:30","attivita":"Ortofrutta"}],[],[{"inizio":"20:00","fine":"02:30","attivita":"Ortofrutta"}],[{"inizio":"20:00","fine":"02:30","attivita":"Ortofrutta"}],[{"inizio":"19:00","fine":"03:00","attivita":"Ortofrutta"}],[{"inizio":"14:00","fine":"20:00","attivita":"Ortofrutta"}],[{"inizio":"20:00","fine":"02:30","attivita":"Ortofrutta"}]]},{"reparto":"Ortofrutta","nome":"Sanogo Yaya","giorni":[[{"inizio":"13:00","fine":"21:00","attivita":"Ortofrutta"}],[{"inizio":"13:00","fine":"21:00","attivita":"Ortofrutta"}],[],[{"inizio":"13:00","fine":"21:00","attivita":"Ortofrutta"}],[{"inizio":"13:00","fine":"21:00","attivita":"Ortofrutta"}],[{"inizio":"10:00","fine":"19:00","attivita":"Ortofrutta"}],[{"inizio":"14:00","fine":"21:00","attivita":"Ortofrutta"}]]},{"reparto":"Ortofrutta","nome":"Diabate Seidou","giorni":[[{"inizio":"13:00","fine":"21:00","attivita":"Ortofrutta"}],[],[{"inizio":"09:00","fine":"17:00","attivita":"Ortofrutta"}],[{"inizio":"09:00","fine":"18:00","attivita":"Ortofrutta"}],[{"inizio":"09:00","fine":"18:00","attivita":"Ortofrutta"}],[{"inizio":"10:00","fine":"19:00","attivita":"Ortofrutta"}],[{"inizio":"14:00","fine":"20:00","attivita":"Ortofrutta"}]]},{"reparto":"Ortofrutta","nome":"Koura Bilal","giorni":[[{"inizio":"20:00","fine":"02:30","attivita":"Ortofrutta"}],[],[{"inizio":"20:00","fine":"02:30","attivita":"Ortofrutta"}],[{"inizio":"20:00","fine":"02:30","attivita":"Ortofrutta"}],[{"inizio":"19:00","fine":"03:00","attivita":"Ortofrutta"}],[{"inizio":"14:00","fine":"20:00","attivita":"Ortofrutta"}],[{"inizio":"20:00","fine":"02:30","attivita":"Ortofrutta"}]]},{"reparto":"Ortofrutta","nome":"Hossen Sarowar","giorni":[[{"inizio":"20:00","fine":"02:30","attivita":"Ortofrutta"}],[{"inizio":"20:00","fine":"02:30","attivita":"Ortofrutta"}],[{"inizio":"20:00","fine":"02:30","attivita":"Ortofrutta"}],[{"inizio":"20:00","fine":"02:30","attivita":"Ortofrutta"}],[{"inizio":"19:00","fine":"03:00","attivita":"Ortofrutta"}],[],[{"inizio":"17:00","fine":"00:30","attivita":"Ortofrutta"}]]},{"reparto":"Ortofrutta","nome":"Ehigie Osakponmwen","giorni":[[{"inizio":"19:00","fine":"02:30","attivita":"Ortofrutta"}],[],[{"inizio":"20:00","fine":"02:30","attivita":"Ortofrutta"}],[{"inizio":"20:00","fine":"02:30","attivita":"Ortofrutta"}],[{"inizio":"19:00","fine":"03:00","attivita":"Ortofrutta"}],[{"inizio":"14:00","fine":"20:00","attivita":"Ortofrutta"}],[{"inizio":"20:00","fine":"02:30","attivita":"Ortofrutta"}]]},{"reparto":"Ortofrutta","nome":"Mubashir Saleem","giorni":[[],[{"inizio":"19:00","fine":"02:30","attivita":"Ortofrutta"}],[{"inizio":"20:00","fine":"02:30","attivita":"Ortofrutta"}],[{"inizio":"20:00","fine":"02:30","attivita":"Ortofrutta"}],[{"inizio":"19:00","fine":"03:00","attivita":"Ortofrutta"}],[{"inizio":"14:00","fine":"20:00","attivita":"Ortofrutta"}],[{"inizio":"20:00","fine":"02:30","attivita":"Ortofrutta"}]]},{"reparto":"Ortofrutta","nome":"Sissoko Sekou","giorni":[[],[{"inizio":"13:00","fine":"21:00","attivita":"Ortofrutta"}],[{"inizio":"09:00","fine":"17:00","attivita":"Ortofrutta"}],[{"inizio":"13:00","fine":"21:00","attivita":"Ortofrutta"}],[{"inizio":"13:00","fine":"21:00","attivita":"Ortofrutta"}],[{"inizio":"10:00","fine":"19:00","attivita":"Ortofrutta"}],[{"inizio":"14:00","fine":"20:00","attivita":"Ortofrutta"}]]},{"reparto":"Ortofrutta","nome":"Samake Djibril","giorni":[[{"inizio":"13:00","fine":"21:00","attivita":"Ortofrutta"}],[{"inizio":"13:00","fine":"21:00","attivita":"Ortofrutta"}],[],[{"inizio":"09:00","fine":"18:00","attivita":"Ortofrutta"}],[{"inizio":"13:00","fine":"21:00","attivita":"Ortofrutta"}],[{"inizio":"10:00","fine":"19:00","attivita":"Ortofrutta"}],[{"inizio":"14:00","fine":"21:00","attivita":"Ortofrutta"}]]},{"reparto":"Ortofrutta","nome":"Fabala Sissoko","giorni":[[{"inizio":"13:00","fine":"21:00","attivita":"Ortofrutta"}],[{"inizio":"13:00","fine":"21:00","attivita":"Ortofrutta"}],[],[{"inizio":"13:00","fine":"21:00","attivita":"Ortofrutta"}],[{"inizio":"13:00","fine":"21:00","attivita":"Ortofrutta"}],[{"inizio":"10:00","fine":"19:00","attivita":"Ortofrutta"}],[{"inizio":"14:00","fine":"21:00","attivita":"Ortofrutta"}]]},{"reparto":"Ortofrutta","nome":"Attiar","giorni":[[],[{"inizio":"09:00","fine":"17:00","attivita":"Ortofrutta"}],[{"inizio":"09:00","fine":"17:00","attivita":"Ortofrutta"}],[{"inizio":"09:00","fine":"17:00","attivita":"Ortofrutta"}],[{"inizio":"09:00","fine":"17:00","attivita":"Ortofrutta"}],[],[]]},{"reparto":"Ortofrutta","nome":"Hassan Hasib","giorni":[[],[{"inizio":"13:00","fine":"21:00","attivita":"Ortofrutta"}],[{"inizio":"13:00","fine":"20:00","attivita":"Ortofrutta"}],[{"inizio":"13:00","fine":"20:00","attivita":"Ortofrutta"}],[{"inizio":"13:00","fine":"20:00","attivita":"Ortofrutta"}],[{"inizio":"10:00","fine":"19:00","attivita":"Ortofrutta"}],[{"inizio":"14:00","fine":"21:00","attivita":"Ortofrutta"}]]},{"reparto":"Ortofrutta","nome":"Diakite Ibrahim","giorni":[[{"inizio":"13:00","fine":"21:00","attivita":"Ortofrutta"}],[{"inizio":"13:00","fine":"21:00","attivita":"Ortofrutta"}],[],[{"inizio":"13:00","fine":"21:00","attivita":"Ortofrutta"}],[{"inizio":"13:00","fine":"21:00","attivita":"Ortofrutta"}],[{"inizio":"10:00","fine":"19:00","attivita":"Ortofrutta"}],[{"inizio":"14:00","fine":"21:00","attivita":"Ortofrutta"}]]},{"reparto":"Ortofrutta","nome":"Hussain Hazrat","giorni":[[{"inizio":"09:00","fine":"16:00","attivita":"Ortofrutta"}],[{"inizio":"09:00","fine":"16:00","attivita":"Ortofrutta"}],[{"inizio":"09:00","fine":"17:00","attivita":"Ortofrutta"}],[{"inizio":"09:00","fine":"18:00","attivita":"Ortofrutta"}],[{"inizio":"09:00","fine":"18:00","attivita":"Ortofrutta"}],[{"inizio":"10:00","fine":"19:00","attivita":"Ortofrutta"}],[]]},{"reparto":"Ortofrutta","nome":"Bance Jan Luc","giorni":[[{"inizio":"13:00","fine":"21:00","attivita":"Ortofrutta"}],[],[{"inizio":"13:00","fine":"21:00","attivita":"Ortofrutta"}],[{"inizio":"13:00","fine":"20:00","attivita":"Ortofrutta"}],[{"inizio":"13:00","fine":"21:00","attivita":"Ortofrutta"}],[{"inizio":"10:00","fine":"19:00","attivita":"Ortofrutta"}],[{"inizio":"14:00","fine":"21:00","attivita":"Ortofrutta"}]]},{"reparto":"Ortofrutta","nome":"Bamba Amidou","giorni":[[{"inizio":"09:00","fine":"16:00","attivita":"Ortofrutta"}],[{"inizio":"09:00","fine":"16:00","attivita":"Ortofrutta"}],[],[{"inizio":"09:00","fine":"18:00","attivita":"Ortofrutta"}],[{"inizio":"09:00","fine":"18:00","attivita":"Ortofrutta"}],[{"inizio":"10:00","fine":"19:00","attivita":"Ortofrutta"}],[{"inizio":"14:00","fine":"20:00","attivita":"Ortofrutta"}]]},{"reparto":"Ortofrutta","nome":"Sangare Oumar","giorni":[[{"inizio":"20:00","fine":"02:30","attivita":"Ortofrutta"}],[],[{"inizio":"20:00","fine":"02:30","attivita":"Ortofrutta"}],[{"inizio":"20:00","fine":"02:30","attivita":"Ortofrutta"}],[{"inizio":"19:00","fine":"03:00","attivita":"Ortofrutta"}],[{"inizio":"14:00","fine":"20:00","attivita":"Ortofrutta"}],[{"inizio":"20:00","fine":"02:30","attivita":"Ortofrutta"}]]},{"reparto":"Ortofrutta","nome":"Ibrahima Diop","giorni":[[],[{"inizio":"13:00","fine":"21:00","attivita":"Ortofrutta"}],[{"inizio":"13:00","fine":"21:00","attivita":"Ortofrutta"}],[{"inizio":"09:00","fine":"18:00","attivita":"Ortofrutta"}],[{"inizio":"09:00","fine":"18:00","attivita":"Ortofrutta"}],[{"inizio":"10:00","fine":"19:00","attivita":"Ortofrutta"}],[{"inizio":"14:00","fine":"21:00","attivita":"Ortofrutta"}]]},{"reparto":"Ortofrutta","nome":"Afridi Ali","giorni":[[{"inizio":"13:00","fine":"20:00","attivita":"Ortofrutta"}],[{"inizio":"13:00","fine":"20:00","attivita":"Ortofrutta"}],[{"inizio":"13:00","fine":"20:00","attivita":"Ortofrutta"}],[{"inizio":"13:00","fine":"21:00","attivita":"Ortofrutta"}],[{"inizio":"13:00","fine":"20:00","attivita":"Ortofrutta"}],[{"inizio":"10:00","fine":"19:00","attivita":"Ortofrutta"}],[]]},{"reparto":"Ortofrutta","nome":"Daboussi Kamel","giorni":[[{"inizio":"13:00","fine":"19:30","attivita":"Ortofrutta"}],[{"inizio":"13:00","fine":"19:30","attivita":"Ortofrutta"}],[{"inizio":"13:00","fine":"19:30","attivita":"Ortofrutta"}],[{"inizio":"13:00","fine":"19:30","attivita":"Ortofrutta"}],[{"inizio":"13:00","fine":"19:30","attivita":"Ortofrutta"}],[],[]]},{"reparto":"Ortofrutta","nome":"Islam Shiful","giorni":[[],[{"inizio":"13:00","fine":"20:00","attivita":"Ortofrutta"}],[{"inizio":"13:00","fine":"20:00","attivita":"Ortofrutta"}],[{"inizio":"13:00","fine":"20:00","attivita":"Ortofrutta"}],[{"inizio":"13:00","fine":"20:00","attivita":"Ortofrutta"}],[{"inizio":"13:00","fine":"20:00","attivita":"Ortofrutta"}],[{"inizio":"13:00","fine":"20:00","attivita":"Ortofrutta"}]]},{"reparto":"Ortofrutta","nome":"Kouadio Bertin","giorni":[[],[{"inizio":"13:00","fine":"20:00","attivita":"Ortofrutta"}],[{"inizio":"13:00","fine":"20:00","attivita":"Ortofrutta"}],[{"inizio":"13:00","fine":"21:00","attivita":"Ortofrutta"}],[{"inizio":"13:00","fine":"20:00","attivita":"Ortofrutta"}],[{"inizio":"09:00","fine":"19:00","attivita":"Ortofrutta"}],[{"inizio":"13:00","fine":"20:00","attivita":"Ortofrutta"}]]},{"reparto":"Ortofrutta","nome":"Alamin Bepary","giorni":[[{"inizio":"09:00","fine":"16:00","attivita":"Ortofrutta"}],[{"inizio":"09:00","fine":"16:00","attivita":"Ortofrutta"}],[],[{"inizio":"13:00","fine":"21:00","attivita":"Ortofrutta"}],[{"inizio":"09:00","fine":"18:00","attivita":"Ortofrutta"}],[{"inizio":"10:00","fine":"19:00","attivita":"Ortofrutta"}],[{"inizio":"14:00","fine":"20:00","attivita":"Ortofrutta"}]]},{"reparto":"Ortofrutta","nome":"Kebe Mahadi","giorni":[[{"inizio":"13:00","fine":"15:30","attivita":"Pane"}],[{"inizio":"13:00","fine":"15:30","attivita":"Pane"}],[{"inizio":"13:00","fine":"15:30","attivita":"Pane"}],[{"inizio":"13:00","fine":"15:30","attivita":"Pane"}],[{"inizio":"13:00","fine":"15:30","attivita":"Pane"}],[{"inizio":"13:00","fine":"15:30","attivita":"Pane"}],[]]},{"reparto":"Ortofrutta","nome":"Barry Patè","giorni":[[{"inizio":"08:00","fine":"15:00","attivita":"Lavaggio forno"}],[],[{"inizio":"13:00","fine":"20:00","attivita":"Ortofrutta"}],[{"inizio":"13:00","fine":"21:00","attivita":"Ortofrutta"}],[{"inizio":"13:00","fine":"20:00","attivita":"Ortofrutta"}],[{"inizio":"10:00","fine":"19:00","attivita":"Ortofrutta"}],[{"inizio":"14:00","fine":"21:00","attivita":"Ortofrutta"}]]},{"reparto":"Ortofrutta","nome":"Igiebor","giorni":[[{"inizio":"09:00","fine":"15:00","attivita":"Ortofrutta"}],[{"inizio":"11:00","fine":"14:30","attivita":"Ortofrutta"}],[{"inizio":"11:00","fine":"14:30","attivita":"Ortofrutta"}],[],[{"inizio":"11:00","fine":"14:30","attivita":"Ortofrutta"}],[{"inizio":"11:00","fine":"14:30","attivita":"Ortofrutta"}],[]]},{"reparto":"Ortofrutta","nome":"Shamraiz A.","giorni":[[{"inizio":"13:00","fine":"19:00","attivita":"Ortofrutta"}],[],[{"inizio":"13:00","fine":"19:00","attivita":"Ortofrutta"}],[{"inizio":"10:00","fine":"18:00","attivita":"Ortofrutta"}],[{"inizio":"10:00","fine":"19:00","attivita":"Ortofrutta"}],[{"inizio":"09:00","fine":"19:00","attivita":"Ortofrutta"}],[{"inizio":"14:00","fine":"20:00","attivita":"Ortofrutta"}]]},{"reparto":"Ortofrutta","nome":"Fallow Ka","giorni":[[{"inizio":"08:00","fine":"15:00","attivita":"Ortofrutta"}],[{"inizio":"08:00","fine":"15:00","attivita":"Ortofrutta"}],[{"inizio":"08:00","fine":"15:00","attivita":"Ortofrutta"}],[{"inizio":"08:00","fine":"16:00","attivita":"Ortofrutta"}],[{"inizio":"08:00","fine":"16:00","attivita":"Ortofrutta"}],[{"inizio":"10:00","fine":"19:00","attivita":"Ortofrutta"}],[]]},{"reparto":"Ortofrutta","nome":"Khogyani R","giorni":[[{"inizio":"09:00","fine":"17:00","attivita":"Ortofrutta"}],[{"inizio":"09:00","fine":"17:00","attivita":"Ortofrutta"}],[{"inizio":"09:00","fine":"17:00","attivita":"Ortofrutta"}],[{"inizio":"09:00","fine":"17:00","attivita":"Ortofrutta"}],[{"inizio":"09:00","fine":"17:00","attivita":"Ortofrutta"}],[{"inizio":"10:00","fine":"19:00","attivita":"Ortofrutta"}],[]]},{"reparto":"Ortofrutta","nome":"Zourganine Dare","giorni":[[],[{"inizio":"13:00","fine":"21:00","attivita":"Ortofrutta"}],[{"inizio":"13:00","fine":"21:00","attivita":"Ortofrutta"}],[{"inizio":"13:00","fine":"21:00","attivita":"Ortofrutta"}],[{"inizio":"13:00","fine":"21:00","attivita":"Ortofrutta"}],[{"inizio":"10:00","fine":"19:00","attivita":"Ortofrutta"}],[{"inizio":"14:00","fine":"21:00","attivita":"Ortofrutta"}]]},{"reparto":"Ortofrutta","nome":"Atif Raza","giorni":[[{"inizio":"20:00","fine":"02:30","attivita":"Ortofrutta"}],[{"inizio":"20:00","fine":"02:30","attivita":"Ortofrutta"}],[{"inizio":"20:00","fine":"02:30","attivita":"Ortofrutta"}],[{"inizio":"22:00","fine":"06:00","attivita":"Ortofrutta"}],[{"inizio":"21:00","fine":"06:00","attivita":"Ortofrutta"}],[],[{"inizio":"22:00","fine":"02:30","attivita":"Ortofrutta"}]]},{"reparto":"Ortofrutta","nome":"Said Ahmed","giorni":[[{"inizio":"20:00","fine":"02:30","attivita":"Ortofrutta"}],[{"inizio":"20:00","fine":"02:30","attivita":"Ortofrutta"}],[{"inizio":"20:00","fine":"02:30","attivita":"Ortofrutta"}],[{"inizio":"20:00","fine":"02:30","attivita":"Ortofrutta"}],[{"inizio":"19:00","fine":"03:00","attivita":"Ortofrutta"}],[],[{"inizio":"20:00","fine":"02:30","attivita":"Ortofrutta"}]]},{"reparto":"Ortofrutta","nome":"Md Saiful","giorni":[[],[{"inizio":"21:00","fine":"04:00","attivita":"Ortofrutta"}],[{"inizio":"21:00","fine":"04:00","attivita":"Ortofrutta"}],[{"inizio":"20:00","fine":"04:00","attivita":"Ortofrutta"}],[{"inizio":"20:00","fine":"05:00","attivita":"Ortofrutta"}],[{"inizio":"15:00","fine":"21:00","attivita":"Ortofrutta"}],[{"inizio":"21:00","fine":"04:00","attivita":"Ortofrutta"}]]},{"reparto":"Ortofrutta","nome":"Faye Assane","giorni":[[{"inizio":"20:00","fine":"02:30","attivita":"Ortofrutta"}],[{"inizio":"19:00","fine":"02:30","attivita":"Ortofrutta"}],[{"inizio":"20:00","fine":"02:30","attivita":"Ortofrutta"}],[{"inizio":"20:00","fine":"02:30","attivita":"Ortofrutta"}],[{"inizio":"19:00","fine":"03:00","attivita":"Ortofrutta"}],[],[{"inizio":"20:00","fine":"02:30","attivita":"Ortofrutta"}]]},{"reparto":"Ortofrutta","nome":"Shakir Faraz","giorni":[[{"inizio":"20:00","fine":"02:30","attivita":"Ortofrutta"}],[{"inizio":"23:00","fine":"06:00","attivita":"Ortofrutta"}],[{"inizio":"23:00","fine":"06:00","attivita":"Ortofrutta"}],[],[{"inizio":"21:00","fine":"06:00","attivita":"Ortofrutta"}],[{"inizio":"22:00","fine":"06:00","attivita":"Ortofrutta"}],[{"inizio":"22:00","fine":"05:30","attivita":"Ortofrutta"}]]},{"reparto":"Ortofrutta","nome":"Traore Lassana","giorni":[[{"inizio":"20:00","fine":"02:30","attivita":"Ortofrutta"}],[{"inizio":"20:00","fine":"02:30","attivita":"Ortofrutta"}],[],[{"inizio":"20:00","fine":"02:30","attivita":"Ortofrutta"}],[{"inizio":"19:00","fine":"03:00","attivita":"Ortofrutta"}],[{"inizio":"14:00","fine":"20:00","attivita":"Ortofrutta"}],[{"inizio":"20:00","fine":"02:30","attivita":"Ortofrutta"}]]},{"reparto":"Ortofrutta","nome":"Ali Waqas","giorni":[[{"inizio":"20:00","fine":"02:30","attivita":"Ortofrutta"}],[],[{"inizio":"20:00","fine":"02:30","attivita":"Ortofrutta"}],[{"inizio":"20:00","fine":"02:30","attivita":"Ortofrutta"}],[{"inizio":"19:00","fine":"03:00","attivita":"Ortofrutta"}],[{"inizio":"14:00","fine":"20:00","attivita":"Ortofrutta"}],[{"inizio":"20:00","fine":"02:30","attivita":"Ortofrutta"}]]},{"reparto":"Ortofrutta","nome":"Moussa Camara","giorni":[[{"inizio":"20:00","fine":"02:30","attivita":"Ortofrutta"}],[{"inizio":"20:00","fine":"02:30","attivita":"Ortofrutta"}],[],[{"inizio":"20:00","fine":"02:30","attivita":"Ortofrutta"}],[{"inizio":"19:00","fine":"03:00","attivita":"Ortofrutta"}],[{"inizio":"14:00","fine":"20:00","attivita":"Ortofrutta"}],[{"inizio":"20:00","fine":"02:30","attivita":"Ortofrutta"}]]},{"reparto":"Ortofrutta","nome":"Bakayoko Adama","giorni":[[{"inizio":"20:00","fine":"02:30","attivita":"Ortofrutta"}],[{"inizio":"20:00","fine":"02:30","attivita":"Ortofrutta"}],[{"inizio":"20:00","fine":"02:30","attivita":"Ortofrutta"}],[{"inizio":"20:00","fine":"02:30","attivita":"Ortofrutta"}],[{"inizio":"19:00","fine":"03:00","attivita":"Ortofrutta"}],[],[{"inizio":"20:00","fine":"02:30","attivita":"Ortofrutta"}]]},{"reparto":"Ortofrutta","nome":"Kashif Ali","giorni":[[{"inizio":"22:00","fine":"06:00","attivita":"Ortofrutta"}],[{"inizio":"23:00","fine":"06:00","attivita":"Ortofrutta"}],[{"inizio":"20:00","fine":"02:30","attivita":"Ortofrutta"}],[],[{"inizio":"20:00","fine":"03:00","attivita":"Ortofrutta"}],[{"inizio":"14:00","fine":"20:00","attivita":"Ortofrutta"},{"inizio":"00:00","fine":"06:00","attivita":"Ortofrutta"}],[{"inizio":"22:00","fine":"05:30","attivita":"Ortofrutta"}]]},{"reparto":"Ortofrutta","nome":"Ali Asad (Logistica)","giorni":[[{"inizio":"23:00","fine":"06:00","attivita":"Ortofrutta"}],[{"inizio":"23:00","fine":"06:00","attivita":"Ortofrutta"}],[{"inizio":"23:00","fine":"06:00","attivita":"Ortofrutta"}],[{"inizio":"22:00","fine":"06:00","attivita":"Ortofrutta"}],[{"inizio":"21:00","fine":"06:00","attivita":"Ortofrutta"}],[],[{"inizio":"22:00","fine":"05:30","attivita":"Ortofrutta"}]]},{"reparto":"Ortofrutta","nome":"Camara Harouna","giorni":[[{"inizio":"20:00","fine":"02:30","attivita":"Ortofrutta"}],[{"inizio":"20:00","fine":"02:30","attivita":"Ortofrutta"}],[{"inizio":"20:00","fine":"02:30","attivita":"Ortofrutta"}],[{"inizio":"20:00","fine":"02:30","attivita":"Ortofrutta"}],[{"inizio":"20:00","fine":"06:00","attivita":"Ortofrutta"}],[],[{"inizio":"22:00","fine":"05:30","attivita":"Ortofrutta"}]]},{"reparto":"Ortofrutta","nome":"Hussain Saqib","giorni":[[{"inizio":"20:00","fine":"03:00","attivita":"Ortofrutta"}],[{"inizio":"20:00","fine":"03:00","attivita":"Ortofrutta"}],[{"inizio":"20:00","fine":"03:00","attivita":"Ortofrutta"}],[{"inizio":"20:00","fine":"03:00","attivita":"Ortofrutta"}],[{"inizio":"20:00","fine":"03:00","attivita":"Ortofrutta"}],[],[{"inizio":"20:00","fine":"04:00","attivita":"Ortofrutta"}]]},{"reparto":"Ortofrutta","nome":"Guindo Boukary","giorni":[[{"inizio":"19:00","fine":"02:30","attivita":"Ortofrutta"}],[{"inizio":"20:00","fine":"02:30","attivita":"Ortofrutta"}],[{"inizio":"20:00","fine":"02:30","attivita":"Ortofrutta"}],[{"inizio":"20:00","fine":"02:30","attivita":"Ortofrutta"}],[{"inizio":"19:00","fine":"03:00","attivita":"Ortofrutta"}],[],[{"inizio":"20:00","fine":"02:30","attivita":"Ortofrutta"}]]},{"reparto":"Ortofrutta","nome":"Rana Mollah","giorni":[[{"inizio":"21:00","fine":"04:00","attivita":"Ortofrutta"}],[{"inizio":"21:00","fine":"04:00","attivita":"Ortofrutta"}],[],[{"inizio":"20:00","fine":"02:30","attivita":"Ortofrutta"}],[{"inizio":"20:00","fine":"03:00","attivita":"Ortofrutta"}],[{"inizio":"15:00","fine":"21:00","attivita":"Ortofrutta"}],[{"inizio":"21:00","fine":"02:30","attivita":"Ortofrutta"}]]},{"reparto":"Ortofrutta","nome":"Bamba","giorni":[[{"inizio":"23:00","fine":"06:00","attivita":"Ortofrutta"}],[{"inizio":"23:00","fine":"06:00","attivita":"Ortofrutta"}],[{"inizio":"23:00","fine":"06:00","attivita":"Ortofrutta"}],[{"inizio":"23:00","fine":"06:00","attivita":"Ortofrutta"}],[{"inizio":"23:00","fine":"06:00","attivita":"Ortofrutta"}],[{"inizio":"22:00","fine":"06:00","attivita":"Ortofrutta"}],[]]},{"reparto":"Ortofrutta","nome":"Zaman Rawish","giorni":[[{"inizio":"21:00","fine":"02:30","attivita":"Ortofrutta"}],[{"inizio":"19:00","fine":"02:30","attivita":"Ortofrutta"}],[{"inizio":"21:00","fine":"02:30","attivita":"Ortofrutta"}],[{"inizio":"20:00","fine":"02:30","attivita":"Ortofrutta"}],[{"inizio":"19:00","fine":"03:00","attivita":"Ortofrutta"}],[],[{"inizio":"20:00","fine":"02:30","attivita":"Ortofrutta"}]]},{"reparto":"Ortofrutta","nome":"Saqlain Muhammad","giorni":[[{"inizio":"23:00","fine":"06:00","attivita":"Ortofrutta"}],[],[{"inizio":"23:00","fine":"06:00","attivita":"Ortofrutta"}],[{"inizio":"22:00","fine":"05:30","attivita":"Ortofrutta"}],[{"inizio":"21:00","fine":"06:00","attivita":"Ortofrutta"}],[{"inizio":"22:00","fine":"06:00","attivita":"Ortofrutta"}],[{"inizio":"22:00","fine":"05:30","attivita":"Ortofrutta"}]]},{"reparto":"Ortofrutta","nome":"Agbaegbe Lucky","giorni":[[{"inizio":"19:00","fine":"02:00","attivita":"Ortofrutta"}],[{"inizio":"20:00","fine":"02:30","attivita":"Ortofrutta"}],[{"inizio":"20:00","fine":"02:30","attivita":"Ortofrutta"}],[{"inizio":"20:00","fine":"02:30","attivita":"Ortofrutta"}],[{"inizio":"21:00","fine":"06:00","attivita":"Ortofrutta"}],[],[{"inizio":"22:00","fine":"05:30","attivita":"Ortofrutta"}]]},{"reparto":"Ortofrutta","nome":"Ansu Stephen","giorni":[[],[{"inizio":"19:00","fine":"02:30","attivita":"Ortofrutta"}],[{"inizio":"20:00","fine":"02:30","attivita":"Ortofrutta"}],[{"inizio":"20:00","fine":"02:30","attivita":"Ortofrutta"}],[{"inizio":"19:00","fine":"03:00","attivita":"Ortofrutta"}],[{"inizio":"14:00","fine":"20:00","attivita":"Ortofrutta"}],[{"inizio":"20:00","fine":"02:30","attivita":"Ortofrutta"}]]},{"reparto":"Ortofrutta","nome":"Sangare Issa","giorni":[[{"inizio":"20:00","fine":"02:30","attivita":"Ortofrutta"}],[],[{"inizio":"20:00","fine":"02:30","attivita":"Ortofrutta"}],[{"inizio":"20:00","fine":"02:30","attivita":"Ortofrutta"}],[{"inizio":"19:00","fine":"03:00","attivita":"Ortofrutta"}],[{"inizio":"14:00","fine":"20:00","attivita":"Ortofrutta"}],[{"inizio":"20:00","fine":"02:30","attivita":"Ortofrutta"}]]},{"reparto":"Ortofrutta","nome":"Muhammad Tayyab","giorni":[[{"inizio":"19:00","fine":"02:30","attivita":"Ortofrutta"}],[{"inizio":"19:00","fine":"02:30","attivita":"Ortofrutta"}],[{"inizio":"20:00","fine":"02:30","attivita":"Ortofrutta"}],[{"inizio":"20:00","fine":"02:30","attivita":"Ortofrutta"}],[{"inizio":"19:00","fine":"03:00","attivita":"Ortofrutta"}],[],[{"inizio":"20:00","fine":"02:30","attivita":"Ortofrutta"}]]},{"reparto":"Ortofrutta","nome":"Alssan Wango","giorni":[[{"inizio":"20:00","fine":"02:30","attivita":"Ortofrutta"}],[{"inizio":"20:00","fine":"02:30","attivita":"Ortofrutta"}],[{"inizio":"20:00","fine":"02:30","attivita":"Ortofrutta"}],[{"inizio":"20:00","fine":"02:30","attivita":"Ortofrutta"}],[{"inizio":"19:00","fine":"03:00","attivita":"Ortofrutta"}],[],[{"inizio":"20:00","fine":"02:30","attivita":"Ortofrutta"}]]},{"reparto":"Ortofrutta","nome":"Diallo Ali","giorni":[[{"inizio":"20:00","fine":"02:30","attivita":"Ortofrutta"}],[{"inizio":"20:00","fine":"02:30","attivita":"Ortofrutta"}],[{"inizio":"20:00","fine":"02:30","attivita":"Ortofrutta"}],[{"inizio":"20:00","fine":"02:30","attivita":"Ortofrutta"}],[{"inizio":"19:00","fine":"03:00","attivita":"Ortofrutta"}],[],[{"inizio":"20:00","fine":"02:30","attivita":"Ortofrutta"}]]},{"reparto":"Ortofrutta","nome":"Mazza Mario Antonio","giorni":[[{"inizio":"19:00","fine":"02:30","attivita":"Ortofrutta"}],[{"inizio":"19:00","fine":"02:30","attivita":"Ortofrutta"}],[{"inizio":"20:00","fine":"02:30","attivita":"Ortofrutta"}],[{"inizio":"20:00","fine":"02:30","attivita":"Ortofrutta"}],[{"inizio":"19:00","fine":"03:00","attivita":"Ortofrutta"}],[],[{"inizio":"20:00","fine":"02:30","attivita":"Ortofrutta"}]]},{"reparto":"Ortofrutta","nome":"Mollah","giorni":[[{"inizio":"21:00","fine":"04:00","attivita":"Ortofrutta"}],[{"inizio":"21:00","fine":"04:00","attivita":"Ortofrutta"}],[],[{"inizio":"20:00","fine":"04:00","attivita":"Ortofrutta"}],[{"inizio":"20:00","fine":"05:00","attivita":"Ortofrutta"}],[{"inizio":"15:00","fine":"21:00","attivita":"Ortofrutta"}],[{"inizio":"21:00","fine":"04:00","attivita":"Ortofrutta"}]]},{"reparto":"Ortofrutta","nome":"Ahmad Waqas","giorni":[[{"inizio":"23:00","fine":"06:00","attivita":"Ortofrutta"}],[{"inizio":"23:00","fine":"06:00","attivita":"Ortofrutta"}],[{"inizio":"23:00","fine":"06:00","attivita":"Ortofrutta"}],[{"inizio":"22:00","fine":"06:00","attivita":"Ortofrutta"}],[{"inizio":"21:00","fine":"06:00","attivita":"Ortofrutta"}],[{"inizio":"22:00","fine":"06:00","attivita":"Ortofrutta"}],[]]},{"reparto":"Ortofrutta","nome":"Hassan Raza","giorni":[[{"inizio":"23:00","fine":"06:00","attivita":"Ortofrutta"}],[{"inizio":"23:00","fine":"06:00","attivita":"Ortofrutta"}],[{"inizio":"23:00","fine":"06:00","attivita":"Ortofrutta"}],[{"inizio":"22:00","fine":"06:00","attivita":"Ortofrutta"}],[{"inizio":"21:00","fine":"06:00","attivita":"Ortofrutta"}],[{"inizio":"22:00","fine":"06:00","attivita":"Ortofrutta"}],[]]},{"reparto":"Ortofrutta","nome":"Singh Navtej","giorni":[[{"inizio":"23:00","fine":"06:00","attivita":"Ortofrutta"}],[{"inizio":"23:00","fine":"06:00","attivita":"Ortofrutta"}],[{"inizio":"23:00","fine":"06:00","attivita":"Ortofrutta"}],[{"inizio":"22:00","fine":"06:00","attivita":"Ortofrutta"}],[{"inizio":"21:00","fine":"06:00","attivita":"Ortofrutta"}],[{"inizio":"22:00","fine":"06:00","attivita":"Ortofrutta"}],[]]},{"reparto":"Ortofrutta","nome":"Qamar","giorni":[[{"inizio":"23:00","fine":"06:00","attivita":"Ortofrutta"}],[{"inizio":"23:00","fine":"06:00","attivita":"Ortofrutta"}],[{"inizio":"23:00","fine":"06:00","attivita":"Ortofrutta"}],[{"inizio":"22:00","fine":"06:00","attivita":"Ortofrutta"}],[{"inizio":"21:00","fine":"06:00","attivita":"Ortofrutta"}],[{"inizio":"22:00","fine":"06:00","attivita":"Ortofrutta"}],[]]},{"reparto":"Ortofrutta","nome":"Assoumon Jean F.","giorni":[[{"inizio":"22:00","fine":"06:00","attivita":"Ortofrutta"}],[{"inizio":"22:00","fine":"06:00","attivita":"Ortofrutta"}],[{"inizio":"23:00","fine":"06:00","attivita":"Ortofrutta"}],[{"inizio":"22:00","fine":"06:00","attivita":"Ortofrutta"}],[{"inizio":"22:00","fine":"06:00","attivita":"Ortofrutta"}],[],[{"inizio":"22:00","fine":"06:00","attivita":"Ortofrutta"}]]},{"reparto":"Vuoti/Grocery","nome":"Osimani","giorni":[[{"inizio":"06:30","fine":"13:00","attivita":"INTERI"}],[{"inizio":"06:30","fine":"13:00","attivita":"INTERI"}],[{"inizio":"06:30","fine":"13:00","attivita":"INTERI"}],[{"inizio":"06:30","fine":"13:00","attivita":"INTERI"}],[{"inizio":"06:30","fine":"13:00","attivita":"INTERI"}],[{"inizio":"06:30","fine":"13:00","attivita":"INTERI"}],[{"inizio":"06:00","fine":"12:30","attivita":"Vuoti/Grocery"}]]},{"reparto":"Vuoti/Grocery","nome":"Prelashi","giorni":[[{"inizio":"08:00","fine":"15:00","attivita":"2° GIRO (NICOLA)"}],[{"inizio":"10:00","fine":"17:00","attivita":"FRUTTA RIC."}],[{"inizio":"08:00","fine":"15:00","attivita":"2° GIRO (NICOLA)"}],[{"inizio":"08:00","fine":"15:00","attivita":"2° GIRO (NICOLA)"}],[{"inizio":"08:00","fine":"15:00","attivita":"2° GIRO (NICOLA)"}],[{"inizio":"08:00","fine":"15:00","attivita":"2° GIRO (NICOLA)"}],[]]},{"reparto":"Vuoti/Grocery","nome":"Sultan","giorni":[[{"inizio":"04:00","fine":"06:00","attivita":"CARICO"},{"inizio":"06:00","fine":"10:30","attivita":"INTERI"}],[{"inizio":"08:00","fine":"15:00","attivita":"2° GIRO (NICOLA)"}],[{"inizio":"04:00","fine":"06:00","attivita":"CARICO"},{"inizio":"06:00","fine":"10:30","attivita":"INTERI"}],[{"inizio":"04:00","fine":"06:00","attivita":"CARICO"},{"inizio":"06:00","fine":"10:30","attivita":"INTERI"}],[{"inizio":"04:00","fine":"06:00","attivita":"CARICO"},{"inizio":"06:00","fine":"10:30","attivita":"INTERI"}],[{"inizio":"04:00","fine":"06:00","attivita":"CARICO"},{"inizio":"06:00","fine":"10:30","attivita":"INTERI"}],[{"inizio":"06:00","fine":"12:30","attivita":"NAVETTA/VUOTI"}]]},{"reparto":"Vuoti/Grocery","nome":"Davide N.","giorni":[[{"inizio":"04:00","fine":"06:00","attivita":"CARICO"},{"inizio":"06:00","fine":"10:30","attivita":"RETRATTILE"}],[{"inizio":"04:00","fine":"06:00","attivita":"CARICO"},{"inizio":"06:00","fine":"10:30","attivita":"RETRATTILE"}],[{"inizio":"04:00","fine":"06:00","attivita":"CARICO"},{"inizio":"06:00","fine":"10:30","attivita":"RETRATTILE"}],[{"inizio":"04:00","fine":"06:00","attivita":"CARICO"},{"inizio":"06:00","fine":"10:30","attivita":"RETRATTILE"}],[{"inizio":"04:00","fine":"06:00","attivita":"CARICO"},{"inizio":"06:00","fine":"10:30","attivita":"RETRATTILE"}],[{"inizio":"04:00","fine":"06:00","attivita":"CARICO"},{"inizio":"06:00","fine":"10:30","attivita":"RETRATTILE"}],[]]},{"reparto":"Vuoti/Grocery","nome":"Naeem","giorni":[[{"inizio":"06:00","fine":"12:30","attivita":"RETRATTILE"}],[{"inizio":"06:00","fine":"12:30","attivita":"RETRATTILE"}],[{"inizio":"06:00","fine":"12:30","attivita":"RETRATTILE"}],[{"inizio":"06:00","fine":"12:30","attivita":"RETRATTILE"}],[{"inizio":"06:00","fine":"12:30","attivita":"RETRATTILE"}],[{"inizio":"06:00","fine":"12:30","attivita":"RETRATTILE"}],[{"inizio":"06:00","fine":"12:30","attivita":"NAVETTA/VUOTI"}]]},{"reparto":"Vuoti/Grocery","nome":"Chinetti","giorni":[[{"inizio":"06:00","fine":"12:30","attivita":"RETRATTILE"}],[{"inizio":"06:00","fine":"12:30","attivita":"RETRATTILE"}],[{"inizio":"06:00","fine":"12:30","attivita":"RETRATTILE"}],[{"inizio":"06:00","fine":"12:30","attivita":"RETRATTILE"}],[{"inizio":"06:00","fine":"12:30","attivita":"RETRATTILE"}],[{"inizio":"06:00","fine":"12:30","attivita":"RETRATTILE"}],[{"inizio":"06:00","fine":"12:30","attivita":"NAVETTA/VUOTI"}]]},{"reparto":"Vuoti/Grocery","nome":"Beltrame","giorni":[[{"inizio":"07:00","fine":"13:00","attivita":"RICEVIMENTO"}],[{"inizio":"07:00","fine":"13:00","attivita":"RICEVIMENTO"}],[{"inizio":"07:00","fine":"13:00","attivita":"RICEVIMENTO"}],[{"inizio":"07:00","fine":"13:00","attivita":"RICEVIMENTO"}],[{"inizio":"07:00","fine":"13:00","attivita":"RICEVIMENTO"}],[{"inizio":"07:00","fine":"13:00","attivita":"INTERI"}],[{"inizio":"06:00","fine":"12:30","attivita":"NAVETTA/VUOTI"}]]},{"reparto":"Vuoti/Grocery","nome":"Vigano'","giorni":[[{"inizio":"06:00","fine":"13:00","attivita":"RICEVIMENTO"}],[{"inizio":"06:00","fine":"13:00","attivita":"RICEVIMENTO"}],[{"inizio":"06:00","fine":"13:00","attivita":"RICEVIMENTO"}],[{"inizio":"06:00","fine":"13:00","attivita":"RICEVIMENTO"}],[{"inizio":"06:00","fine":"13:00","attivita":"RICEVIMENTO"}],[],[]]},{"reparto":"Vuoti/Grocery","nome":"Hamze","giorni":[[{"inizio":"06:00","fine":"12:30","attivita":"INTERI/VUOTI"}],[{"inizio":"06:00","fine":"12:30","attivita":"INTERI/VUOTI"}],[{"inizio":"06:00","fine":"08:30","attivita":"RIC. ACQUE"},{"inizio":"08:30","fine":"12:30","attivita":"NAVETTA"}],[{"inizio":"06:00","fine":"08:30","attivita":"RIC. ACQUE"},{"inizio":"08:30","fine":"12:30","attivita":"NAVETTA"}],[{"inizio":"06:00","fine":"08:30","attivita":"RIC. ACQUE"},{"inizio":"08:30","fine":"12:30","attivita":"NAVETTA"}],[{"inizio":"06:00","fine":"12:30","attivita":"INTERI/VUOTI"}],[]]},{"reparto":"Vuoti/Grocery","nome":"Casu A.","giorni":[[{"inizio":"04:00","fine":"06:00","attivita":"CARICO"},{"inizio":"06:00","fine":"10:30","attivita":"BAIE 2° GIRO"}],[{"inizio":"04:00","fine":"06:00","attivita":"CARICO"},{"inizio":"06:00","fine":"10:30","attivita":"BAIE 2° GIRO"}],[],[],[],[],[]]},{"reparto":"Vuoti/Grocery","nome":"Majani","giorni":[[{"inizio":"04:00","fine":"06:00","attivita":"CARICO"},{"inizio":"06:00","fine":"10:30","attivita":"BAIE 2° GIRO"}],[{"inizio":"04:00","fine":"06:00","attivita":"CARICO"},{"inizio":"06:00","fine":"10:30","attivita":"BAIE 2° GIRO"}],[],[],[],[],[]]},{"reparto":"Vuoti/Grocery","nome":"Bipul","giorni":[[{"inizio":"07:00","fine":"11:00","attivita":"MULE. MAT. 2"},{"inizio":"11:00","fine":"13:30","attivita":"COMPATT."}],[{"inizio":"07:00","fine":"11:00","attivita":"MULE. MAT. 2"},{"inizio":"11:00","fine":"13:30","attivita":"COMPATT."}],[{"inizio":"07:00","fine":"10:00","attivita":"MULE. MAT. 2"},{"inizio":"10:00","fine":"13:30","attivita":"NAVETTA"}],[{"inizio":"07:00","fine":"10:00","attivita":"MULE. MAT. 2"},{"inizio":"10:00","fine":"13:30","attivita":"NAVETTA"}],[],[{"inizio":"07:00","fine":"10:00","attivita":"MULE. MAT. 2"},{"inizio":"10:00","fine":"13:30","attivita":"NAVETTA"}],[{"inizio":"06:00","fine":"12:30","attivita":"MULETTO MATT. 1"}]]},{"reparto":"Vuoti/Grocery","nome":"Hafed R.","giorni":[[{"inizio":"06:00","fine":"12:30","attivita":"MULETTO MATT. 1"}],[{"inizio":"06:00","fine":"12:30","attivita":"MULETTO MATT. 1"}],[{"inizio":"06:00","fine":"12:30","attivita":"MULETTO MATT. 1"}],[{"inizio":"06:00","fine":"12:30","attivita":"MULETTO MATT. 1"}],[{"inizio":"05:00","fine":"12:30","attivita":"MULETTO MATT. 1"}],[{"inizio":"05:00","fine":"12:30","attivita":"MULETTO MATT. 1"}],[]]},{"reparto":"Vuoti/Grocery","nome":"Said","giorni":[[{"inizio":"07:00","fine":"14:30","attivita":"GESTIONE REPARTO"}],[{"inizio":"07:00","fine":"14:30","attivita":"GESTIONE REPARTO"}],[{"inizio":"07:00","fine":"14:30","attivita":"GESTIONE REPARTO"}],[{"inizio":"07:00","fine":"14:30","attivita":"GESTIONE REPARTO"}],[{"inizio":"07:00","fine":"10:00","attivita":"MULE. MAT. 2"},{"inizio":"10:00","fine":"14:30","attivita":"GEST. REP"}],[{"inizio":"07:00","fine":"14:30","attivita":"GESTIONE REPARTO"}],[]]},{"reparto":"Vuoti/Grocery","nome":"Nardi","giorni":[[{"inizio":"09:30","fine":"17:30","attivita":"POLYMER"}],[{"inizio":"09:30","fine":"17:30","attivita":"POLYMER"}],[{"inizio":"09:30","fine":"17:30","attivita":"POLYMER"}],[{"inizio":"09:30","fine":"17:30","attivita":"POLYMER"}],[],[],[]]},{"reparto":"Vuoti/Grocery","nome":"Keita","giorni":[[{"inizio":"11:00","fine":"18:00","attivita":"MULETTO CENTRALE"}],[{"inizio":"11:00","fine":"17:00","attivita":"MULETTO CENTRALE"}],[{"inizio":"10:00","fine":"18:00","attivita":"MULETTO CENTRALE"}],[],[{"inizio":"10:00","fine":"18:00","attivita":"MULETTO CENTRALE"}],[{"inizio":"10:00","fine":"18:00","attivita":"MULETTO CENTRALE"}],[{"inizio":"06:30","fine":"12:30","attivita":"COMPATT. + / JOLLY"}]]},{"reparto":"Vuoti/Grocery","nome":"Igiebor","giorni":[[{"inizio":"06:00","fine":"11:00","attivita":"COMPATT."},{"inizio":"11:00","fine":"14:30","attivita":"FRUTTA"}],[{"inizio":"06:00","fine":"11:00","attivita":"COMPATT."},{"inizio":"11:00","fine":"14:30","attivita":"FRUTTA"}],[{"inizio":"06:00","fine":"13:00","attivita":"Pane"}],[{"inizio":"06:00","fine":"13:00","attivita":"Pane"}],[{"inizio":"06:00","fine":"13:00","attivita":"Pane"}],[{"inizio":"06:00","fine":"12:30","attivita":"COMPATTATORI"}],[]]},{"reparto":"Vuoti/Grocery","nome":"Khogyani","giorni":[[{"inizio":"08:00","fine":"13:30","attivita":"SUPPOTO ACQUE"}],[{"inizio":"07:00","fine":"13:30","attivita":"NAVETTA VUOTI"}],[{"inizio":"09:30","fine":"13:00","attivita":"SUPP. ACQUE"},{"inizio":"13:30","fine":"19:30","attivita":"SUPP. ACQUE"}],[{"inizio":"10:00","fine":"18:00","attivita":"MULETTO CENTRALE"}],[{"inizio":"10:00","fine":"18:00","attivita":"POLYMER"}],[{"inizio":"07:00","fine":"10:00","attivita":"NAVETTA"},{"inizio":"10:00","fine":"13:30","attivita":"NAV. ACQUE"}],[]]},{"reparto":"Vuoti/Grocery","nome":"Omar","giorni":[[{"inizio":"06:00","fine":"13:00","attivita":"Pane"}],[{"inizio":"06:00","fine":"13:00","attivita":"Pane"}],[{"inizio":"07:00","fine":"10:00","attivita":"NAVETTA"},{"inizio":"10:00","fine":"13:00","attivita":"SUPP. ACQUE"}],[{"inizio":"07:00","fine":"10:00","attivita":"NAVETTA"},{"inizio":"10:00","fine":"13:00","attivita":"SUPP. ACQUE"}],[{"inizio":"07:00","fine":"13:30","attivita":"NAVETTA VUOTI"}],[{"inizio":"06:00","fine":"13:00","attivita":"Pane"}],[]]},{"reparto":"Vuoti/Grocery","nome":"Rodrigue","giorni":[[{"inizio":"07:00","fine":"13:30","attivita":"NAVETTA VUOTI"}],[],[{"inizio":"07:00","fine":"13:30","attivita":"NAVETTA VUOTI"}],[{"inizio":"13:00","fine":"15:30","attivita":"DIV. RESI"},{"inizio":"15:30","fine":"19:30","attivita":"NAV."}],[{"inizio":"12:00","fine":"15:30","attivita":"DIV. RESI"},{"inizio":"15:30","fine":"19:30","attivita":"NAV."}],[{"inizio":"07:00","fine":"13:00","attivita":"COMPATTATORI"}],[{"inizio":"06:30","fine":"12:30","attivita":"NAVETTA + JOLLY"}]]},{"reparto":"Vuoti/Grocery","nome":"Md Afif","giorni":[[{"inizio":"13:00","fine":"19:30","attivita":"MULETTO POME. 1"}],[{"inizio":"09:30","fine":"13:00","attivita":"SUPP. ACQUE"},{"inizio":"13:30","fine":"19:30","attivita":"SUPP. ACQUE"}],[],[{"inizio":"09:30","fine":"13:00","attivita":"SUPP. ACQUE"},{"inizio":"13:30","fine":"19:30","attivita":"SUPP. ACQUE"}],[{"inizio":"13:00","fine":"19:30","attivita":"MULETTO POME. 1"}],[{"inizio":"13:00","fine":"19:30","attivita":"MULETTO POME. 1"}],[{"inizio":"06:30","fine":"08:00","attivita":"POLYMER +"},{"inizio":"08:00","fine":"12:30","attivita":"JOMLLYULETT. 2"}]]},{"reparto":"Vuoti/Grocery","nome":"Zidane","giorni":[[{"inizio":"12:00","fine":"15:30","attivita":"DIV. RESI"},{"inizio":"15:30","fine":"19:30","attivita":"NAV."}],[{"inizio":"13:00","fine":"15:30","attivita":"DIV. RESI"},{"inizio":"15:30","fine":"19:30","attivita":"NAV."}],[{"inizio":"13:00","fine":"15:30","attivita":"DIV. RESI"},{"inizio":"15:30","fine":"19:30","attivita":"NAV."}],[],[{"inizio":"05:00","fine":"12:30","attivita":"NAVETTA VUOTI"}],[{"inizio":"05:00","fine":"12:30","attivita":"NAVETTA VUOTI"}],[{"inizio":"06:30","fine":"12:30","attivita":"P A PNAEN E+ + / J OJOLLLLYY"}]]},{"reparto":"Vuoti/Grocery","nome":"H. Asif","giorni":[[{"inizio":"06:00","fine":"12:30","attivita":"NAVETTA VUOTI"}],[{"inizio":"06:00","fine":"12:30","attivita":"NAVETTA VUOTI"}],[],[{"inizio":"07:00","fine":"13:30","attivita":"NAVETTA VUOTI"}],[{"inizio":"08:00","fine":"13:30","attivita":"SUPPOTO ACQUE"}],[{"inizio":"13:00","fine":"15:30","attivita":"DIV. RESI"},{"inizio":"15:30","fine":"19:30","attivita":"NAV."}],[{"inizio":"08:30","fine":"12:30","attivita":"POLYMER + / JOLLY"}]]},{"reparto":"Vuoti/Grocery","nome":"Barry Alcenie","giorni":[[{"inizio":"07:00","fine":"13:00","attivita":"COMPATTATORI"}],[{"inizio":"07:00","fine":"13:00","attivita":"FORMAZIONE"}],[{"inizio":"07:00","fine":"13:00","attivita":"COMPATTATORI"}],[{"inizio":"07:00","fine":"13:00","attivita":"COMPATTATORI"}],[{"inizio":"07:00","fine":"13:00","attivita":"COMPATTATORI"}],[{"inizio":"07:00","fine":"13:00","attivita":"FORMAZIONE"}],[]]},{"reparto":"Vuoti/Grocery","nome":"Issa","giorni":[[{"inizio":"09:00","fine":"15:00","attivita":"Pane"}],[{"inizio":"07:00","fine":"13:00","attivita":"COMPATTATORI"}],[{"inizio":"06:00","fine":"12:00","attivita":"COMPATTATORI"}],[{"inizio":"06:00","fine":"12:00","attivita":"COMPATTATORI"}],[{"inizio":"06:00","fine":"12:00","attivita":"COMPATTATORI"}],[{"inizio":"10:00","fine":"18:00","attivita":"POLYMER"}],[]]},{"reparto":"Vuoti/Grocery","nome":"Kebe","giorni":[[{"inizio":"13:00","fine":"15:30","attivita":"FRUTTA"},{"inizio":"15:30","fine":"19:30","attivita":"Pane"}],[{"inizio":"13:00","fine":"15:30","attivita":"FRUTTA"},{"inizio":"15:30","fine":"19:30","attivita":"Pane"}],[{"inizio":"13:00","fine":"15:30","attivita":"FRUTTA"},{"inizio":"15:30","fine":"19:30","attivita":"Pane"}],[{"inizio":"13:00","fine":"15:30","attivita":"FRUTTA"},{"inizio":"15:30","fine":"19:30","attivita":"Pane"}],[{"inizio":"13:00","fine":"15:30","attivita":"FRUTTA"},{"inizio":"15:30","fine":"19:30","attivita":"Pane"}],[{"inizio":"13:00","fine":"15:30","attivita":"FRUTTA"},{"inizio":"15:30","fine":"19:30","attivita":"Pane"}],[]]},{"reparto":"Vuoti/Grocery","nome":"Fatik","giorni":[[{"inizio":"06:00","fine":"12:30","attivita":"PULIZIE GENERALI"}],[{"inizio":"06:00","fine":"12:30","attivita":"PULIZIE GENERALI"}],[{"inizio":"06:00","fine":"12:30","attivita":"PULIZIE GENERALI"}],[{"inizio":"06:00","fine":"12:30","attivita":"PULIZIE GENERALI"}],[{"inizio":"06:00","fine":"12:30","attivita":"PULIZIE GENERALI"}],[{"inizio":"06:00","fine":"12:30","attivita":"PULIZIE GENERALI"}],[]]}];
+const NOMI_GROCERY_SS38=new Set(['Osimani','Prelashi','Sultan','Davide N.','Naeem','Chinetti','Beltrame',"Vigano'",'Hamze','Casu A.','Majani']);
+TURNI_PDF_SS38.forEach(r=>{if(r.reparto==='Vuoti/Grocery')r.reparto=NOMI_GROCERY_SS38.has(r.nome)?'Grocery/Acque':'Vuoti';});
+const TURNI_BAIE_SS38=[
+  ['Rizzo|00:00|05:30','Jean|02:30|05:30','Shakir|04:00|05:30','Ali Asad (Logistica)|00:00|05:30','Nogarotto|04:00|06:00','Casu|03:30|05:30','Kamara Aurora|04:00|05:30','Singh|00:00|06:00','Atif|00:00|06:00','Saqlain|04:00|06:00','Sultan|04:00|06:00'],
+  ['Qamar|00:00|07:00','Nogarotto|04:00|05:30','Rizzo|00:30|05:30','Singh|04:00|06:00','Ahmed Waqas|00:30|05:30','Kashif|00:00|05:30','Ali Asad (Logistica)|00:00|05:30','Jean|02:00|05:30','Raza|00:30|05:30','Bamba Djakaridja|04:00|06:00','Saqlain|04:00|05:30','Casu|04:00|06:00'],
+  ['Ahmed Waqas|00:30|05:30','Kashif|04:00|06:00','Rizzo|00:30|05:30','Singh|04:00|05:30','Shakir|04:00|05:30','Raza|00:30|05:30','Jean|02:00|05:30','Qamar|00:00|07:00','Sultan|04:00|05:30','Ali Asad (Logistica)|00:00|06:00','Nogarotto|04:00|06:00','Bamba Djakaridja|04:00|06:00'],
+  ['Raza|00:30|05:30','Sultan|04:00|05:30','Rizzo|00:30|05:30','Jean|02:00|05:30','Qamar|00:00|07:00','Nogarotto|04:00|05:30','Ahmed Waqas|00:30|05:30','Singh|04:00|05:30','Shakir|00:00|06:00','Ali Asad (Logistica)|00:00|06:00','Saqlain|04:00|06:00','Bamba Djakaridja|04:00|06:00'],
+  ['Ahmed Waqas|23:00|05:30','Saqlain|04:00|06:00','Ali Asad (Logistica)|23:00|05:30','Sultan|04:00|06:00','Singh|04:00|06:00','Jean|02:00|05:30','Atif|04:00|05:30','Raza|23:00|05:30','Nogarotto|04:00|06:00','Qamar|23:00|06:00','Rizzo|23:00|06:00','Bamba Djakaridja|04:00|06:00'],
+  ['Ahmed Waqas|23:00|06:00','Nogarotto|04:00|06:00','Ali Asad (Logistica)|23:00|06:00','Sultan|04:00|05:30','Qamar|23:00|07:00','Saqlain|04:00|06:00','Jean|02:00|06:00','Raza|23:00|06:00','Rizzo|23:00|06:00','Casu|04:00|06:00','Kamara Aurora|04:00|06:00','Shakir|03:30|06:00','Atif|04:00|06:00','Lucky|04:00|06:00','Singh|04:00|06:00'],
+  ['Shakir|22:00|07:00','Singh|22:00|07:00','Qamar|22:00|07:00','Raza|22:00|07:00','Ahmed Waqas|22:00|07:00','Saqlain|22:00|07:00','Bamba Djakaridja|22:00|07:00']
+];
+const BAIE_PER_PERSONA={};
+TURNI_BAIE_SS38.forEach((giorno,gi)=>giorno.forEach(voce=>{const[nome,inizio,fine]=voce.split('|');if(!BAIE_PER_PERSONA[nome])BAIE_PER_PERSONA[nome]=GIORNI.map(()=>[]);BAIE_PER_PERSONA[nome][gi].push({inizio,fine,attivita:'Carico'});}));
+Object.entries(BAIE_PER_PERSONA).forEach(([nome,giorni])=>TURNI_PDF_SS38.push({reparto:'Carico',nome,giorni}));
+let PDF_SS38_GIORNO=0;
+let PDF_SS38_REPARTO='Tutti';
+function renderTurniPdfTab(){
+  const reparti=['Tutti',...new Set(TURNI_PDF_SS38.map(r=>r.reparto))];
+  const opG=GIORNI.map((g,i)=>'<option value="'+i+'" '+(i===PDF_SS38_GIORNO?'selected':'')+'>'+g+' '+(14+i)+'/09</option>').join('');
+  const opR=reparti.map(r=>'<option value="'+r+'" '+(r===PDF_SS38_REPARTO?'selected':'')+'>'+r+'</option>').join('');
+  document.getElementById('mc').innerHTML='<div class="card"><div class="ct">Bozza turni ricostruita dai PDF - settimana 38</div><div class="alert awarn">Riferimento locale non collegato al database. I giorni sono mantenuti come intestati nei PDF; la trasformazione definitiva sulla data effettiva di inizio turno verrà applicata dopo la validazione.</div><div class="g2 no-print" style="max-width:520px;margin-bottom:14px;"><div class="fg"><label>Giorno</label><select onchange="PDF_SS38_GIORNO=Number(this.value);renderCorpoTurniPdf()">'+opG+'</select></div><div class="fg"><label>Reparto</label><select onchange="PDF_SS38_REPARTO=this.value;renderCorpoTurniPdf()">'+opR+'</select></div></div><div class="brow no-print"><button class="btn bo bsm" onclick="window.print()">🖨 Stampa giornata</button></div><div id="pdf-ss38-body"></div></div>';
+  renderCorpoTurniPdf();
+}
+function renderCorpoTurniPdf(){
+  const body=document.getElementById('pdf-ss38-body');if(!body)return;
+  const righe=TURNI_PDF_SS38.filter(r=>(PDF_SS38_REPARTO==='Tutti'||r.reparto===PDF_SS38_REPARTO)&&r.giorni[PDF_SS38_GIORNO]?.length);
+  const ore=righe.reduce((tot,r)=>tot+r.giorni[PDF_SS38_GIORNO].reduce((s,t)=>s+durataTurno(t),0),0);
+  const html=righe.sort((a,b)=>a.reparto.localeCompare(b.reparto)||a.nome.localeCompare(b.nome)).map(r=>'<tr><td><span class="pill pb">'+r.reparto+'</span></td><td><b>'+r.nome+'</b></td><td>'+r.giorni[PDF_SS38_GIORNO].map(t=>'<span class="pdf-shift"><b>'+t.inizio+'-'+t.fine+'</b> · '+t.attivita+'</span>').join('')+'</td><td>'+r.giorni[PDF_SS38_GIORNO].reduce((s,t)=>s+durataTurno(t),0).toFixed(1)+' h</td></tr>').join('');
+  body.innerHTML='<div class="stats"><div class="stat"><div class="n">'+righe.length+'</div><div class="l">Righe con turno</div></div><div class="stat"><div class="n">'+ore.toFixed(1)+'</div><div class="l">Ore riportate</div></div></div><div class="tw"><table><thead><tr><th>Reparto</th><th>Persona</th><th>Turno/i</th><th>Ore</th></tr></thead><tbody>'+(html||'<tr><td colspan="4" class="empty">Nessun turno nel filtro selezionato.</td></tr>')+'</tbody></table></div>';
+}
+
+const APPALTO_STORAGE_KEY='nexus_programmazione_appalto_locale_v1';
+const APPALTO_MAPPING_KEY='nexus_mappature_appalto_locale_v1';
+let APPALTO_SETTIMANE=caricaSettimaneAppalto();
+let APPALTO_MAPPING=caricaMappatureAppalto();
+let APPALTO_LUNEDI='';
+let APPALTO_GIORNO=0;
+let APPALTO_REPARTO='Tutti';
+let APPALTO_SOLO_ASSENTI=false;
+let APPALTO_ASSENZE=new Map();
+let APPALTO_ASSENZE_VERIFICATE=false;
+let APPALTO_MSG='';
+let APPALTO_VISTA_PERSONE=false;
+let APPALTO_OF_DATA={previsioni:{},obiettivi:{},percLegaggio:0,percNavetta:0,caricato:false};
+
+function caricaSettimaneAppalto(){try{return JSON.parse(localStorage.getItem(APPALTO_STORAGE_KEY)||'{}');}catch(_){return{};}}
+function salvaSettimaneAppalto(){localStorage.setItem(APPALTO_STORAGE_KEY,JSON.stringify(APPALTO_SETTIMANE));}
+function caricaMappatureAppalto(){try{const m=JSON.parse(localStorage.getItem(APPALTO_MAPPING_KEY)||'{}');return{reparti:m.reparti||{},attivita:m.attivita||{}};}catch(_){return{reparti:{},attivita:{}};}}
+function salvaMappatureAppalto(){localStorage.setItem(APPALTO_MAPPING_KEY,JSON.stringify(APPALTO_MAPPING));}
+async function caricaStatoCassanoSupabase(){
+  if(!SESSIONE_CASSANO||!projectIdValido())return;
+  statoSync('Caricamento da Supabase…');
+  const[cfg,map,settimane,turni]=await Promise.all([
+    sb.from('ConfigurazioneCassano').select('*').eq('ID_Magazzino',ID_MAGAZZINO_CASSANO).maybeSingle(),
+    sb.from('MappatureCassano').select('*'),
+    sb.from('SettimaneCassano').select('*').eq('ID_Magazzino',ID_MAGAZZINO_CASSANO),
+    sb.from('TurniCassanoPianificati').select('*')
+  ]);
+  const errore=cfg.error||map.error||settimane.error||turni.error;
+  if(errore){statoSync('Errore di caricamento');toast('Dati Cassano non caricati: '+errore.message,'err');return;}
+  if(cfg.data?.Dati){CONFIG_APPALTO={...structuredClone(DEFAULT_CONFIG_APPALTO),...cfg.data.Dati};localStorage.setItem(CONFIG_APPALTO_KEY,JSON.stringify(CONFIG_APPALTO));}
+  if((map.data||[]).length){
+    APPALTO_MAPPING={reparti:{},attivita:{}};
+    map.data.forEach(m=>{if(m.Tipo==='reparto')APPALTO_MAPPING.reparti[m.ChiaveOrigine]=m.ID_Reparto;else if(m.Tipo==='attivita')APPALTO_MAPPING.attivita[m.ChiaveOrigine]=m.ID_Attivita;});
+    salvaMappatureAppalto();
+  }
+  if((settimane.data||[]).length){
+    const remote={};(settimane.data||[]).forEach(s=>remote[s.Lunedi]={stato:s.Stato,origine:s.OrigineLunedi?'Settimana precedente '+s.OrigineLunedi:'Supabase',righe:[]});
+    (turni.data||[]).forEach(t=>{const s=remote[t.Settimana];if(!s)return;s.righe.push({uid:t.UID,giorno:Number(t.GiornoIndice),nome:t.NomeOrigine||'',id_dipendente:t.ID_Dipendente,reparto:t.RepartoOrigine||'',id_reparto:t.ID_Reparto,attivita:t.AttivitaOrigine||'',id_attivita:t.ID_Attivita,origine_nome:t.NomeOrigine||'',origine_reparto:t.RepartoOrigine||'',origine_attivita:t.AttivitaOrigine||'',inizio:t.OraInizio?String(t.OraInizio).slice(0,5):'',fine:t.OraFine?String(t.OraFine).slice(0,5):'',tipo:t.Tipo||'standard',sostituisce:t.UIDSostituito||undefined,note:t.Note||''});});
+    APPALTO_SETTIMANE={...APPALTO_SETTIMANE,...remote};salvaSettimaneAppalto();
+  }
+  statoSync('Connesso a Supabase');
+}
+function righeMappatureSupabase(){
+  const ora=new Date().toISOString(),uid=SESSIONE_CASSANO?.user?.id||null,righe=[];
+  Object.entries(APPALTO_MAPPING.reparti||{}).forEach(([k,id])=>righe.push({Tipo:'reparto',ChiaveOrigine:k,ID_Reparto:Number(id),AggiornatoIl:ora,AggiornatoDa:uid}));
+  Object.entries(APPALTO_MAPPING.attivita||{}).forEach(([k,id])=>righe.push({Tipo:'attivita',ChiaveOrigine:k,ID_Attivita:Number(id),AggiornatoIl:ora,AggiornatoDa:uid}));
+  return righe;
+}
+async function salvaMappatureSupabase(){
+  const righe=righeMappatureSupabase();if(!righe.length)return null;
+  const{error}=await sb.from('MappatureCassano').upsert(righe,{onConflict:'Tipo,ChiaveOrigine'});return error;
+}
+async function salvaSettimanaSupabase(){
+  const settimana=APPALTO_SETTIMANE[APPALTO_LUNEDI];if(!settimana){toast('Prima crea la settimana.','warn');return;}
+  if(!SESSIONE_CASSANO||!projectIdValido()){toast('Sessione Supabase non valida.','err');return;}
+  statoSync('Salvataggio settimana…');
+  const ora=new Date().toISOString(),utente=SESSIONE_CASSANO.user.id,origine=(settimana.origine||'').match(/\d{4}-\d{2}-\d{2}/)?.[0]||null;
+  const{error:e1}=await sb.from('SettimaneCassano').upsert({Lunedi:APPALTO_LUNEDI,ID_Magazzino:ID_MAGAZZINO_CASSANO,Stato:settimana.stato||'bozza',OrigineLunedi:origine,AggiornatoIl:ora,AggiornatoDa:utente},{onConflict:'Lunedi'});
+  if(e1){statoSync('Errore di salvataggio');toast('Settimana non salvata: '+e1.message,'err');return;}
+  const righe=(settimana.righe||[]).map(r=>({UID:r.uid,Settimana:APPALTO_LUNEDI,GiornoIndice:Number(r.giorno),ID_Dipendente:r.id_dipendente?Number(r.id_dipendente):null,NomeOrigine:r.origine_nome||r.nome||null,ID_Reparto:r.id_reparto?Number(r.id_reparto):null,RepartoOrigine:r.origine_reparto||r.reparto||null,ID_Attivita:r.id_attivita?Number(r.id_attivita):null,AttivitaOrigine:r.origine_attivita||r.attivita||null,OraInizio:r.inizio||null,OraFine:r.fine||null,Tipo:r.tipo||'standard',UIDSostituito:r.sostituisce||null,Note:r.note||null,AggiornatoIl:ora,AggiornatoDa:utente}));
+  if(righe.length){const{error}=await sb.from('TurniCassanoPianificati').upsert(righe,{onConflict:'UID'});if(error){statoSync('Salvataggio parziale');toast('Testata salvata, ma turni non salvati: '+error.message,'err');return;}}
+  const{data:esistenti,error:e2}=await sb.from('TurniCassanoPianificati').select('UID').eq('Settimana',APPALTO_LUNEDI);
+  if(e2){statoSync('Verifica incompleta');toast('Settimana salvata, verifica righe fallita: '+e2.message,'warn');return;}
+  const attuali=new Set(righe.map(r=>r.UID)),daEliminare=(esistenti||[]).map(x=>x.UID).filter(x=>!attuali.has(x));
+  if(daEliminare.length){const{error}=await sb.from('TurniCassanoPianificati').delete().in('UID',daEliminare);if(error){statoSync('Pulizia incompleta');toast('Turni salvati, ma alcune righe eliminate sono rimaste: '+error.message,'warn');return;}}
+  const erroreMap=await salvaMappatureSupabase();if(erroreMap){statoSync('Settimana salvata');toast('Settimana salvata; collegamenti non sincronizzati: '+erroreMap.message,'warn');return;}
+  statoSync('Salvata '+APPALTO_LUNEDI);toast('Settimana salvata su Supabase.');
+}
+function esportaBackupAppalto(){
+  const backup={formato:'turni-cassano-backup',versione:1,creato_il:new Date().toISOString(),configurazione:CONFIG_APPALTO,settimane:APPALTO_SETTIMANE,mappature:APPALTO_MAPPING};
+  const blob=new Blob([JSON.stringify(backup,null,2)],{type:'application/json'}),url=URL.createObjectURL(blob),a=document.createElement('a');a.href=url;a.download='backup_turni_cassano_'+new Date().toISOString().slice(0,10)+'.json';document.body.appendChild(a);a.click();a.remove();setTimeout(()=>URL.revokeObjectURL(url),1000);toast('Backup locale esportato.');
+}
+async function importaBackupAppalto(input){
+  const file=input.files?.[0];if(!file)return;
+  try{
+    const backup=JSON.parse(await file.text());if(backup.formato!=='turni-cassano-backup'||!backup.settimane||typeof backup.settimane!=='object')throw new Error('Formato backup non riconosciuto');
+    if(!confirm('Ripristinare settimane, configurazione e collegamenti dal backup selezionato? I dati locali attuali verranno sostituiti.')){input.value='';return;}
+    const map=backup.mappature||{};APPALTO_SETTIMANE=backup.settimane;APPALTO_MAPPING={reparti:map.reparti||{},attivita:map.attivita||{}};localStorage.setItem(CONFIG_APPALTO_KEY,JSON.stringify(backup.configurazione||DEFAULT_CONFIG_APPALTO));CONFIG_APPALTO=caricaConfigAppaltoLocale();salvaSettimaneAppalto();salvaMappatureAppalto();
+    const lun=APPALTO_SETTIMANE[APPALTO_LUNEDI]?APPALTO_LUNEDI:(Object.keys(APPALTO_SETTIMANE).sort().at(-1)||APPALTO_LUNEDI);caricaSettimanaAppalto(lun);APPALTO_MSG='Backup ripristinato correttamente.';renderCorpoAppalto();
+  }catch(e){toast('Backup non importato: '+e.message,'err');}finally{input.value='';}
+}
+function normalizzaNomePlanner(s){return String(s||'').replace(/\([^)]*\)/g,' ').normalize('NFD').replace(/[\u0300-\u036f]/g,'').replace(/[^a-zA-Z0-9]+/g,' ').trim().toLowerCase();}
+function collegaDipendentePlanner(nome){
+  const n=normalizzaNomePlanner(nome);if(!n)return null;
+  let d=DIPENDENTI.find(x=>normalizzaNomePlanner(x.Nome)===n);
+  if(d)return d;
+  const parole=n.split(' ').filter(x=>x.length>2);
+  d=DIPENDENTI.find(x=>{const dn=normalizzaNomePlanner(x.Nome);return parole.length&&parole.every(p=>dn.includes(p));});
+  return d||null;
+}
+function collegaRepartoPlanner(nome){const n=normalizzaNomePlanner(nome),id=APPALTO_MAPPING.reparti[n];return REPARTI.find(r=>id&&String(r.ID_Reparto)===String(id))||REPARTI.find(r=>normalizzaNomePlanner(nomeReparto(r))===n)||null;}
+function collegaAttivitaPlanner(idReparto,nome){
+  const n=normalizzaNomePlanner(nome),id=APPALTO_MAPPING.attivita[String(idReparto||'')+'|'+n];const elenco=idReparto?attivitaDiReparto(idReparto):ATTIVITA_TUTTE;
+  return elenco.find(a=>id&&String(a.ID_Attivita)===String(id))||elenco.find(a=>normalizzaNomePlanner(nomeAttivita(a))===n)||elenco.find(a=>{const an=normalizzaNomePlanner(nomeAttivita(a));return n&&((an.includes(n)||n.includes(an))&&Math.min(an.length,n.length)>3);})||null;
+}
+function normalizzaRighePlanner(settimana){
+  (settimana?.righe||[]).forEach(r=>{
+    r.origine_nome=r.origine_nome||r.nome;r.origine_reparto=r.origine_reparto||r.reparto;r.origine_attivita=r.origine_attivita||r.attivita;
+    if(!r.id_dipendente){const d=collegaDipendentePlanner(r.nome);if(d){r.id_dipendente=d.ID_Dipendente;r.nome=d.Nome;}}
+    if(!r.id_reparto){const rep=collegaRepartoPlanner(r.reparto);if(rep){r.id_reparto=rep.ID_Reparto;r.reparto=nomeReparto(rep);}}
+    if(!r.id_attivita){const a=collegaAttivitaPlanner(r.id_reparto,r.attivita);if(a){r.id_attivita=a.ID_Attivita;r.attivita=nomeAttivita(a);}}
+    r.tipo=r.tipo||'standard';
+  });
+}
+function importaPdfComeSettimana(lunedi){
+  const righe=[];const viste=new Set();let seq=0;
+  TURNI_PDF_SS38.forEach(persona=>persona.giorni.forEach((turni,gi)=>turni.forEach(t=>{
+    const chiave=[gi,normalizzaNomePlanner(persona.nome),persona.reparto,t.attivita,t.inizio,t.fine].join('|');if(viste.has(chiave))return;viste.add(chiave);
+    const dip=collegaDipendentePlanner(persona.nome);
+    const rep=collegaRepartoPlanner(persona.reparto),att=collegaAttivitaPlanner(rep?.ID_Reparto,t.attivita);
+    righe.push({uid:'std-'+Date.now()+'-'+seq++,giorno:gi,nome:dip?.Nome||persona.nome,id_dipendente:dip?.ID_Dipendente||null,reparto:rep?nomeReparto(rep):persona.reparto,id_reparto:rep?.ID_Reparto||null,attivita:att?nomeAttivita(att):t.attivita,id_attivita:att?.ID_Attivita||null,origine_nome:persona.nome,origine_reparto:persona.reparto,origine_attivita:t.attivita,inizio:t.inizio,fine:t.fine,tipo:'standard'});
+  })));
+  APPALTO_SETTIMANE[lunedi]={stato:'bozza',origine:'PDF settimana 38',righe};salvaSettimaneAppalto();return righe.length;
+}
+function renderProgrammazioneAppaltoTab(){
+  const oggi=new Date().toISOString().slice(0,10);APPALTO_LUNEDI=lunediSettimana(oggi);
+  if(!APPALTO_SETTIMANE[APPALTO_LUNEDI]&&APPALTO_LUNEDI==='2026-09-14')importaPdfComeSettimana(APPALTO_LUNEDI);
+  document.getElementById('mc').innerHTML=`<div class="card"><div class="ct">Programmazione dell'intero appalto</div>
+    <div class="alert aok">Programmatore unico collegato a Supabase: ogni fascia appartiene alla persona, anche quando nella stessa giornata cambia reparto o attività. Le modifiche restano in bozza sul dispositivo fino a “Salva settimana”.</div>
+    <div class="g2 no-print" style="max-width:520px;"><div class="fg"><label>Lunedì della settimana</label><input type="date" id="appalto-lun" value="${APPALTO_LUNEDI}" onchange="caricaSettimanaAppalto(this.value)"></div><div class="fg"><label>Reparto</label><select id="appalto-rep" onchange="APPALTO_REPARTO=this.value;renderCorpoAppalto()"></select></div></div>
+    <div class="brow no-print"><button class="btn bv bsm" onclick="salvaSettimanaSupabase()">💾 Salva settimana</button><button class="btn bp bsm" onclick="creaDaSettimanaPrecedente()">↪ Crea dalla settimana precedente</button><button class="btn bo bsm" onclick="aggiungiFasciaAppalto()">＋ Aggiungi fascia</button><button class="btn bo bsm" onclick="controllaAssenzeAppalto()">🔎 Controlla assenze Nexus</button><button class="btn bo bsm" onclick="APPALTO_SOLO_ASSENTI=!APPALTO_SOLO_ASSENTI;renderCorpoAppalto()">Solo da sostituire</button><button class="btn bo bsm" onclick="APPALTO_VISTA_PERSONE=!APPALTO_VISTA_PERSONE;renderCorpoAppalto()">Vista persone/reparto</button><button class="btn bo bsm" onclick="esportaBackupAppalto()">⇩ Backup</button><button class="btn bo bsm" onclick="document.getElementById('appalto-import').click()">⇧ Ripristina</button><input id="appalto-import" type="file" accept="application/json,.json" style="display:none" onchange="importaBackupAppalto(this)"><button class="btn bo bsm" onclick="window.print()">🖨 Stampa</button></div>
+    <div id="appalto-msg"></div><div id="appalto-tabs"></div><div id="appalto-of"></div><div id="appalto-controlli"></div><div id="appalto-personale"></div><div id="appalto-body"></div></div>`;
+  caricaSettimanaAppalto(APPALTO_LUNEDI);
+}
+function caricaSettimanaAppalto(lunedi){
+  APPALTO_LUNEDI=lunediSettimana(lunedi);APPALTO_GIORNO=0;APPALTO_ASSENZE=new Map();APPALTO_ASSENZE_VERIFICATE=false;APPALTO_MSG='';
+  APPALTO_OF_DATA={previsioni:{},obiettivi:{},percLegaggio:0,percNavetta:0,caricato:false};
+  const dataInput=document.getElementById('appalto-lun');if(dataInput)dataInput.value=APPALTO_LUNEDI;
+  const settimana=APPALTO_SETTIMANE[APPALTO_LUNEDI];
+  normalizzaRighePlanner(settimana);if(settimana)salvaSettimaneAppalto();
+  const reparti=['Tutti',...new Set([...REPARTI.map(nomeReparto),...(settimana?.righe||[]).map(r=>r.reparto)].filter(Boolean))];
+  if(!reparti.includes(APPALTO_REPARTO))APPALTO_REPARTO='Tutti';
+  const sel=document.getElementById('appalto-rep');if(sel)sel.innerHTML=reparti.map(r=>`<option ${r===APPALTO_REPARTO?'selected':''}>${r}</option>`).join('');
+  renderTabsAppalto();
+  caricaDatiOrtofruttaAppalto().then(()=>renderCorpoAppalto());
+}
+async function caricaDatiOrtofruttaAppalto(){
+  if(!SB_URL.includes('eqtyfnluswalfassmlxd')){APPALTO_MSG='Errore: project ID Supabase non valido.';return;}
+  const date=[...Array(8)].map((_,i)=>addGiorni(APPALTO_LUNEDI,i));
+  const [ob,prev,param]=await Promise.all([
+    sb.from('ObiettiviAttivitaOrtofrutta').select('*'),
+    sb.from('PrevisioneColliOrtofrutta').select('*').in('Data',date),
+    sb.from('ParametriOrtofrutta').select('*').eq('ID',1).maybeSingle()
+  ]);
+  const errore=ob.error||prev.error||param.error;if(errore){APPALTO_OF_DATA={previsioni:{},obiettivi:{},percLegaggio:0,percNavetta:0,caricato:false};return;}
+  const obiettivi={};(ob.data||[]).forEach(o=>obiettivi[o.ID_Attivita]=Number(o.ObiettivoColliOra)||0);
+  const previsioni={};(prev.data||[]).forEach(p=>previsioni[p.Data]=Number(p.ColliPrevisti)||0);
+  APPALTO_OF_DATA={previsioni,obiettivi,percLegaggio:Number(param.data?.PercentualeLegaggio)||0,percNavetta:Number(param.data?.PercentualeNavetta)||0,caricato:true};
+}
+function renderTabsAppalto(){
+  const el=document.getElementById('appalto-tabs');if(!el)return;
+  el.innerHTML=`<div class="daytabs no-print">${GIORNI.map((g,i)=>`<button class="daytab ${i===APPALTO_GIORNO?'on':''}" onclick="APPALTO_GIORNO=${i};renderTabsAppalto()">${g}<br><small>${fmtDataIt(addGiorni(APPALTO_LUNEDI,i))}</small></button>`).join('')}</div>`;renderCorpoAppalto();
+}
+function chiaveAssenza(id,data){return String(id)+'|'+data;}
+function turnoAssente(r){
+  if(!r.id_dipendente)return null;const data=addGiorni(APPALTO_LUNEDI,r.giorno);let a=APPALTO_ASSENZE.get(chiaveAssenza(r.id_dipendente,data));
+  if(!a&&orarioAMinuti(r.fine)<=orarioAMinuti(r.inizio))a=APPALTO_ASSENZE.get(chiaveAssenza(r.id_dipendente,addGiorni(data,1)));
+  return a||null;
+}
+function motivoAssenza(a){return a?.TipoAssenza||a?.Tipo||a?.Motivo||a?.Descrizione||a?.Causale||'Assenza / ferie';}
+function intervalloAssoluto(r){
+  const i=orarioAMinuti(r.inizio),f=orarioAMinuti(r.fine);if(i==null||f==null)return null;
+  const inizio=Number(r.giorno||0)*1440+i;let fine=Number(r.giorno||0)*1440+f;if(f<=i)fine+=1440;return{inizio,fine};
+}
+function intervalliSovrapposti(a,b){const x=intervalloAssoluto(a),y=intervalloAssoluto(b);return!!(x&&y&&x.inizio<y.fine&&y.inizio<x.fine);}
+function conflittiRigaAppalto(r){
+  const s=APPALTO_SETTIMANE[APPALTO_LUNEDI];if(!s||!r.id_dipendente)return[];
+  return s.righe.filter(x=>x.uid!==r.uid&&String(x.id_dipendente)===String(r.id_dipendente)&&intervalliSovrapposti(x,r));
+}
+function candidatiSostituzione(turno){
+  const settimana=APPALTO_SETTIMANE[APPALTO_LUNEDI];if(!settimana)return[];const data=addGiorni(APPALTO_LUNEDI,turno.giorno),notte=orarioAMinuti(turno.fine)<=orarioAMinuti(turno.inizio),dataFine=addGiorni(data,1);
+  return DIPENDENTI.filter(d=>String(d.ID_Dipendente)!==String(turno.id_dipendente))
+    .filter(d=>!APPALTO_ASSENZE.has(chiaveAssenza(d.ID_Dipendente,data))&&(!notte||!APPALTO_ASSENZE.has(chiaveAssenza(d.ID_Dipendente,dataFine))))
+    .filter(d=>!settimana.righe.some(r=>String(r.id_dipendente)===String(d.ID_Dipendente)&&intervalliSovrapposti(r,turno)))
+    .map(d=>({d,esperienza:settimana.righe.filter(r=>String(r.id_dipendente)===String(d.ID_Dipendente)&&(r.attivita===turno.attivita||r.reparto===turno.reparto)).length}))
+    .sort((a,b)=>b.esperienza-a.esperienza||String(a.d.Nome).localeCompare(String(b.d.Nome))).slice(0,8).map(x=>x.d);
+}
+function sostituzioneEsistente(uid){return APPALTO_SETTIMANE[APPALTO_LUNEDI]?.righe.find(r=>r.sostituisce===uid);}
+function trovaRigaAppalto(uid){return APPALTO_SETTIMANE[APPALTO_LUNEDI]?.righe.find(r=>r.uid===uid);}
+function opzioniDipendenteAppalto(r){
+  const corrente=r.id_dipendente?String(r.id_dipendente):'';let extra='';
+  if(!corrente&&r.nome)extra=`<option value="" selected>${r.nome} — da collegare</option>`;
+  return `<select onchange="aggiornaRigaAppalto('${r.uid}','dipendente',this.value)">${extra}<option value="" ${!corrente&&!r.nome?'selected':''}>Scegli persona…</option>${DIPENDENTI.map(d=>`<option value="${d.ID_Dipendente}" ${String(d.ID_Dipendente)===corrente?'selected':''}>${d.Nome}</option>`).join('')}</select>`;
+}
+function opzioniRepartoAppalto(r){
+  const corrente=r.id_reparto?String(r.id_reparto):'';let extra='';
+  if(!corrente&&r.reparto)extra=`<option value="" selected>${r.reparto} — da collegare</option>`;
+  return `<select onchange="aggiornaRigaAppalto('${r.uid}','reparto',this.value)">${extra}<option value="" ${!corrente&&!r.reparto?'selected':''}>Scegli reparto…</option>${REPARTI.map(rep=>`<option value="${rep.ID_Reparto}" ${String(rep.ID_Reparto)===corrente?'selected':''}>${nomeReparto(rep)}</option>`).join('')}</select>`;
+}
+function opzioniAttivitaAppalto(r){
+  const corrente=r.id_attivita?String(r.id_attivita):'',elenco=attivitaDiReparto(r.id_reparto);let extra='';
+  if(!corrente&&r.attivita)extra=`<option value="" selected>${r.attivita} — da collegare</option>`;
+  return `<select onchange="aggiornaRigaAppalto('${r.uid}','attivita',this.value)" ${r.id_reparto?'':'disabled'}>${extra}<option value="" ${!corrente&&!r.attivita?'selected':''}>${r.id_reparto?'Scegli attività…':'Prima il reparto'}</option>${elenco.map(a=>`<option value="${a.ID_Attivita}" ${String(a.ID_Attivita)===corrente?'selected':''}>${nomeAttivita(a)}</option>`).join('')}</select>`;
+}
+function aggiornaRigaAppalto(uid,campo,valore){
+  const r=trovaRigaAppalto(uid);if(!r)return;
+  if(campo==='dipendente'){const d=DIPENDENTI.find(x=>String(x.ID_Dipendente)===String(valore));r.id_dipendente=d?.ID_Dipendente||null;r.nome=d?.Nome||'';}
+  else if(campo==='reparto'){const rep=REPARTI.find(x=>String(x.ID_Reparto)===String(valore)),origine=normalizzaNomePlanner(r.origine_reparto||r.reparto);if(rep&&origine){APPALTO_MAPPING.reparti[origine]=rep.ID_Reparto;salvaMappatureAppalto();}r.origine_reparto=r.origine_reparto||r.reparto;r.origine_attivita=r.origine_attivita||r.attivita;r.id_reparto=rep?.ID_Reparto||null;r.reparto=rep?nomeReparto(rep):'';r.id_attivita=null;r.attivita='';}
+  else if(campo==='attivita'){const a=ATTIVITA_TUTTE.find(x=>String(x.ID_Attivita)===String(valore)),origine=normalizzaNomePlanner(r.origine_attivita||r.attivita);if(a&&origine){APPALTO_MAPPING.attivita[String(r.id_reparto||'')+'|'+origine]=a.ID_Attivita;salvaMappatureAppalto();}r.origine_attivita=r.origine_attivita||r.attivita;r.id_attivita=a?.ID_Attivita||null;r.attivita=a?nomeAttivita(a):'';}
+  else r[campo]=valore;
+  salvaSettimaneAppalto();renderCorpoAppalto();
+}
+function aggiungiFasciaAppalto(){
+  const s=APPALTO_SETTIMANE[APPALTO_LUNEDI];if(!s){toast('Prima crea la settimana.','warn');return;}
+  s.righe.push({uid:'std-'+Date.now(),giorno:APPALTO_GIORNO,nome:'',id_dipendente:null,reparto:APPALTO_REPARTO==='Tutti'?'':APPALTO_REPARTO,id_reparto:null,attivita:'',id_attivita:null,origine_nome:'',origine_reparto:APPALTO_REPARTO==='Tutti'?'':APPALTO_REPARTO,origine_attivita:'',inizio:'06:00',fine:'12:30',tipo:'standard'});
+  normalizzaRighePlanner(s);salvaSettimaneAppalto();APPALTO_SOLO_ASSENTI=false;renderCorpoAppalto();
+}
+function aggiungiMansioneAppalto(uid){
+  const s=APPALTO_SETTIMANE[APPALTO_LUNEDI],base=s?.righe.find(r=>r.uid===uid);if(!s||!base)return;
+  const nuova={uid:(base.tipo==='sostituzione'?'sost-':'std-')+Date.now(),giorno:base.giorno,nome:base.nome,id_dipendente:base.id_dipendente,reparto:base.reparto,id_reparto:base.id_reparto||null,attivita:'',id_attivita:null,origine_nome:base.origine_nome||base.nome,origine_reparto:base.origine_reparto||base.reparto,origine_attivita:'',inizio:base.fine||base.inizio||'06:00',fine:'',tipo:base.tipo==='sostituzione'?'sostituzione':'standard',sostituisce:null};
+  const posizione=s.righe.findIndex(r=>r.uid===uid);s.righe.splice(posizione+1,0,nuova);salvaSettimaneAppalto();APPALTO_SOLO_ASSENTI=false;renderCorpoAppalto();
+}
+function eliminaFasciaAppalto(uid){if(!confirm('Eliminare questa fascia dalla bozza locale?'))return;const s=APPALTO_SETTIMANE[APPALTO_LUNEDI];s.righe=s.righe.filter(r=>r.uid!==uid&&r.sostituisce!==uid);salvaSettimaneAppalto();renderCorpoAppalto();}
+function aggiungiDipendenteGiorno(id){
+  const s=APPALTO_SETTIMANE[APPALTO_LUNEDI],d=DIPENDENTI.find(x=>String(x.ID_Dipendente)===String(id));if(!s||!d)return;
+  s.righe.push({uid:'std-'+Date.now(),giorno:APPALTO_GIORNO,nome:d.Nome,id_dipendente:d.ID_Dipendente,reparto:'',id_reparto:null,attivita:'',id_attivita:null,origine_nome:d.Nome,origine_reparto:'',origine_attivita:'',inizio:'06:00',fine:'12:30',tipo:'standard'});salvaSettimaneAppalto();APPALTO_SOLO_ASSENTI=false;renderCorpoAppalto();
+}
+function renderDisponibilitaPersonaleAppalto(righeGiorno){
+  const el=document.getElementById('appalto-personale');if(!el)return;const data=addGiorni(APPALTO_LUNEDI,APPALTO_GIORNO),programmati=new Set(righeGiorno.map(r=>String(r.id_dipendente)).filter(x=>x&&x!=='null')),assenti=DIPENDENTI.filter(d=>APPALTO_ASSENZE.has(chiaveAssenza(d.ID_Dipendente,data)));
+  const righe=DIPENDENTI.map(d=>{const turni=righeGiorno.filter(r=>String(r.id_dipendente)===String(d.ID_Dipendente)),assenza=APPALTO_ASSENZE.get(chiaveAssenza(d.ID_Dipendente,data));let stato;
+    if(!APPALTO_ASSENZE_VERIFICATE)stato=turni.length?'<span class="pill pg">Programmato</span>':'<span class="pill py">Non programmato</span>';
+    else if(assenza)stato=turni.length?'<span class="pill pr">Assente · da sostituire</span>':'<span class="pill pr">Assente / ferie</span>';
+    else stato=turni.length?'<span class="pill pg">Programmato</span>':'<span class="pill pb">Disponibile</span>';
+    const dettaglio=turni.map(r=>`${r.inizio}–${r.fine} ${r.reparto||''} ${r.attivita||''}`.trim()).join('<br>')||'—';
+    return `<tr><td><b>${d.Nome}</b></td><td>${stato}${assenza?'<br><small>'+motivoAssenza(assenza)+'</small>':''}</td><td>${dettaglio}</td><td class="no-print"><button class="btn bo bsm" title="Aggiungi una fascia" onclick="aggiungiDipendenteGiorno('${d.ID_Dipendente}')" ${assenza?'disabled':''}>＋</button></td></tr>`;
+  }).join('');
+  el.innerHTML=`<details class="cfg-section"><summary>Disponibilità personale Cassano — ${DIPENDENTI.length} dipendenti${APPALTO_ASSENZE_VERIFICATE?' · '+assenti.length+' assenti/ferie':' · assenze non ancora verificate'}</summary><div class="cfg-body">${!APPALTO_ASSENZE_VERIFICATE?'<div class="alert awarn">Premi “Controlla assenze Nexus” per verificare ferie e assenze di tutto il personale Cassano.</div>':''}<div class="stats"><div class="stat"><div class="n">${DIPENDENTI.length}</div><div class="l">Personale Cassano</div></div><div class="stat"><div class="n">${programmati.size}</div><div class="l">Programmati</div></div><div class="stat ${assenti.length?'err':''}"><div class="n">${APPALTO_ASSENZE_VERIFICATE?assenti.length:'—'}</div><div class="l">Assenti / ferie</div></div></div><div class="tw"><table><thead><tr><th>Dipendente</th><th>Disponibilità</th><th>Turni della giornata</th><th class="no-print"></th></tr></thead><tbody>${righe||'<tr><td colspan="4" class="empty">Nessun dipendente attivo associato a Cassano.</td></tr>'}</tbody></table></div></div></details>`;
+}
+function rigaOrtofrutta(r){return String(r.id_reparto)===String(ID_REPARTO_ORTOFRUTTA)||/orto|frutta/i.test(r.reparto||'');}
+function rigaAttivita(r,id,nome){return(id!=null&&String(r.id_attivita)===String(id))||(nome&&new RegExp(nome,'i').test(r.attivita||''));}
+function renderRiepilogoOrtofruttaAppalto(righeGiorno){
+  const el=document.getElementById('appalto-of');if(!el)return;
+  const data=addGiorni(APPALTO_LUNEDI,APPALTO_GIORNO),colli=APPALTO_OF_DATA.previsioni[data];
+  const valide=righeGiorno.filter(r=>!turnoAssente(r)||r.tipo==='sostituzione');
+  const oreAtt=(id,nome)=>valide.filter(r=>rigaOrtofrutta(r)&&rigaAttivita(r,id,nome)).reduce((s,r)=>s+durataTurno(r),0);
+  const oreVent=oreAtt(ID_ATTIVITA_VENTILAZIONE,'ventil'),oreRic=oreAtt(ID_ATTIVITA_RICEVIMENTO,'ricev'),oreLeg=oreAtt(ID_ATTIVITA_LEGAGGIO,'legagg'),oreNav=oreAtt(ID_ATTIVITA_NAVETTA,'navett');
+  const obVent=APPALTO_OF_DATA.obiettivi[ID_ATTIVITA_VENTILAZIONE]||0,necessarieVent=colli!=null&&obVent>0?colli/obVent:null;
+  const budgetRic=Number(CONFIG_APPALTO.ricevimento?.[APPALTO_GIORNO])||null;
+  const budgetLeg=necessarieVent==null?null:necessarieVent*APPALTO_OF_DATA.percLegaggio/100,budgetNav=necessarieVent==null?null:necessarieVent*APPALTO_OF_DATA.percNavetta/100;
+  const oreReparto=valide.filter(r=>rigaOrtofrutta(r)).reduce((s,r)=>s+durataTurno(r),0),prod=colli!=null&&oreReparto>0?colli/oreReparto:null,soglia=Number(CONFIG_APPALTO.sogliaProduttivita)||115;
+  const cella=(budget,ore)=>{const p=budget>0?ore/budget*100:null,cls=p==null?'':p>=100?'pg':p>=80?'py':'pr';return `<td>${budget!=null?budget.toFixed(1)+' h':'—'}</td><td>${ore.toFixed(1)} h</td><td>${p!=null?`<span class="pill ${cls}">${p.toFixed(0)}%</span>`:'—'}</td>`;};
+  el.innerHTML=`<details class="cfg-section" ${APPALTO_REPARTO==='Tutti'||/orto|frutta/i.test(APPALTO_REPARTO)?'open':''}><summary>Controllo Ortofrutta — ${fmtDataIt(data)}</summary><div class="cfg-body"><div class="tw"><table><thead><tr><th>Attività</th><th>Ore necessarie/budget</th><th>Ore programmate</th><th>Copertura</th></tr></thead><tbody><tr><td>Ventilazione pura</td>${cella(necessarieVent,oreVent)}</tr><tr><td>Ricevimento <small>(budget fisso giornaliero)</small></td>${cella(budgetRic,oreRic)}</tr><tr><td>Legaggio</td>${cella(budgetLeg,oreLeg)}</tr><tr><td>Navetta</td>${cella(budgetNav,oreNav)}</tr></tbody></table></div><p style="margin-top:10px;font-size:.82rem;">Produttività complessiva: ${prod!=null?`<span class="pill ${prod>=soglia?'pg':'pr'}">${prod.toFixed(1)} colli/ora</span> su soglia ${soglia}`:'—'}${colli==null?' · previsione colli non presente':''}</p></div></details>`;
+}
+const CONTROLLO_REPARTI_FASCE={ceste:'Lavaggio ceste',forno:'Lavaggio forno',vuoti:'Vuoti',grocery:'Grocery'};
+function chiaveRepartoControllo(r){
+  const att=normalizzaNomePlanner(r.attivita),rep=normalizzaNomePlanner(r.reparto);
+  if(/frutta|orto/.test(att))return null;if(/cest/.test(att))return'ceste';if(/forno/.test(att))return'forno';if(/carico|bai/.test(att))return'carico';
+  if(/cest/.test(rep))return'ceste';if(/forno/.test(rep))return'forno';if(/carico|bai/.test(rep))return'carico';if(/grocer|acque/.test(rep))return'grocery';if(/vuot/.test(rep))return'vuoti';return null;
+}
+function chiaveAttivitaControllo(nome){
+  const n=normalizzaNomePlanner(nome);if(/compatt/.test(n))return'compattatori';if(/mulet/.test(n))return'muletto';if(/navett/.test(n))return'navetta';if(/pane/.test(n))return'pane';if(/polim|poly/.test(n))return'polimer';if(/pulizi/.test(n))return'pulizie';if(/ricev/.test(n))return'ricevimento';if(/stocc/.test(n))return'stoccaggio';if(/abbass/.test(n))return'abbassamenti';if(/cest/.test(n))return'lavaggio ceste';if(/forno/.test(n))return'lavaggio forno';return n;
+}
+function righeValideCopertura(righe){return righe.filter(r=>r.inizio&&r.fine&&(r.tipo==='sostituzione'||!turnoAssente(r)));}
+function intervalloProgrammatoControllo(r){const inizio=(Number(r.giorno)-APPALTO_GIORNO)*1440+minutiOra(r.inizio);let fine=(Number(r.giorno)-APPALTO_GIORNO)*1440+minutiOra(r.fine);if(minutiOra(r.fine)<=minutiOra(r.inizio))fine+=1440;return{inizio,fine};}
+function calcolaCoperturaFasce(rep,righeSettimana){
+  const fabb=CONFIG_APPALTO.fabbisogni?.[rep]?.[APPALTO_GIORNO]||[],programmate=righeValideCopertura(righeSettimana).filter(r=>chiaveRepartoControllo(r)===rep&&r.giorno>=APPALTO_GIORNO&&r.giorno<=APPALTO_GIORNO+1),dettaglio=[];
+  const attivita=[...new Set(fabb.map(r=>r.attivita))];
+  attivita.forEach(att=>{
+    const req=fabb.filter(r=>r.attivita===att),intervalli=req.map(intervalloFabbisogno),da=Math.floor(Math.min(...intervalli.map(x=>x.inizio))/30)*30,a=Math.ceil(Math.max(...intervalli.map(x=>x.fine))/30)*30;
+    for(let m=da;m<a;m+=30){
+      const necessarie=req.filter(r=>{const x=intervalloFabbisogno(r);return x.inizio<=m&&x.fine>m;}).reduce((s,r)=>s+Number(r.persone||0),0);if(!necessarie)continue;
+      const presenti=programmate.filter(r=>{const x=intervalloProgrammatoControllo(r),attOk=rep==='ceste'||rep==='forno'||chiaveAttivitaControllo(r.attivita)===chiaveAttivitaControllo(att);return attOk&&x.inizio<=m&&x.fine>m;}).length;
+      const precedente=dettaglio.at(-1);if(precedente&&precedente.attivita===att&&precedente.fine===m&&precedente.necessarie===necessarie&&precedente.presenti===presenti)precedente.fine=m+30;else dettaglio.push({attivita:att,inizio:m,fine:m+30,necessarie,presenti});
+    }
+  });
+  const oreRichieste=dettaglio.reduce((s,x)=>s+(x.fine-x.inizio)/60*x.necessarie,0),oreCoperte=dettaglio.reduce((s,x)=>s+(x.fine-x.inizio)/60*Math.min(x.presenti,x.necessarie),0),oreMancanti=Math.max(0,oreRichieste-oreCoperte);
+  return{rep,titolo:CONTROLLO_REPARTI_FASCE[rep],dettaglio,oreRichieste,oreCoperte,oreMancanti,completo:oreRichieste>0&&oreMancanti<0.01};
+}
+function htmlCoperturaFasce(esito,aperto){
+  const righe=esito.dettaglio.map(x=>{const manca=Math.max(0,x.necessarie-x.presenti),extra=Math.max(0,x.presenti-x.necessarie);return `<tr><td>${x.attivita}</td><td>${oraMinuti(x.inizio)}–${oraMinuti(x.fine)}</td><td>${x.necessarie}</td><td>${x.presenti}</td><td>${manca?`<span class="pill pr">Manca ${manca}</span>`:extra?`<span class="pill py">Coperta +${extra}</span>`:'<span class="pill pg">Coperta</span>'}</td></tr>`;}).join('');
+  return `<details class="cfg-section" ${aperto?'open':''}><summary>Controllo ${esito.titolo} — ${esito.oreMancanti?esito.oreMancanti.toFixed(1)+' ore-persona mancanti':'copertura completa'}</summary><div class="cfg-body"><div class="tw"><table><thead><tr><th>Attività</th><th>Fascia</th><th>Necessarie</th><th>Programmate</th><th>Stato</th></tr></thead><tbody>${righe||'<tr><td colspan="5" class="empty">Nessun fabbisogno configurato per questa giornata.</td></tr>'}</tbody></table></div></div></details>`;
+}
+function calcolaControlloCarico(righeSettimana){const richieste=Number(CONFIG_APPALTO.carico?.[APPALTO_GIORNO])||0,programmate=righeValideCopertura(righeSettimana).filter(r=>r.giorno===APPALTO_GIORNO&&chiaveRepartoControllo(r)==='carico').reduce((s,r)=>s+durataTurno(r),0);return{richieste,programmate,mancanti:Math.max(0,richieste-programmate),completo:richieste>0&&programmate>=richieste};}
+function renderControlliRepartiAppalto(righeSettimana){
+  const el=document.getElementById('appalto-controlli');if(!el)return;const esiti=Object.keys(CONTROLLO_REPARTI_FASCE).map(k=>calcolaCoperturaFasce(k,righeSettimana)),carico=calcolaControlloCarico(righeSettimana),filtro=chiaveRepartoControllo({reparto:APPALTO_REPARTO,attivita:''});
+  const riepilogo=[...esiti.map(e=>({titolo:e.titolo,richieste:e.oreRichieste,coperte:e.oreCoperte,mancanti:e.oreMancanti,completo:e.completo})),{titolo:'Carico',richieste:carico.richieste,coperte:carico.programmate,mancanti:carico.mancanti,completo:carico.completo}];
+  const righe=riepilogo.map(x=>`<tr><td><b>${x.titolo}</b></td><td>${x.richieste.toFixed(1)} h</td><td>${x.coperte.toFixed(1)} h</td><td>${x.mancanti?`<span class="pill pr">Mancano ${x.mancanti.toFixed(1)} h</span>`:x.richieste?'<span class="pill pg">Completo</span>':'<span class="pill py">Da configurare</span>'}</td></tr>`).join('');
+  const dettagli=esiti.filter(e=>APPALTO_REPARTO==='Tutti'||filtro===e.rep).map(e=>htmlCoperturaFasce(e,filtro===e.rep)).join('');
+  const mostraCarico=APPALTO_REPARTO==='Tutti'||filtro==='carico',caricoHtml=mostraCarico?`<details class="cfg-section" ${filtro==='carico'?'open':''}><summary>Controllo Carico — ${carico.mancanti?carico.mancanti.toFixed(1)+' ore mancanti':'copertura completa'}</summary><div class="cfg-body"><div class="stats"><div class="stat"><div class="n">${carico.richieste.toFixed(1)}</div><div class="l">Ore richieste</div></div><div class="stat"><div class="n">${carico.programmate.toFixed(1)}</div><div class="l">Ore programmate</div></div><div class="stat ${carico.mancanti?'err':''}"><div class="n">${carico.mancanti.toFixed(1)}</div><div class="l">Ore mancanti</div></div></div></div></details>`:'';
+  el.innerHTML=`<details class="cfg-section" open><summary>Riepilogo copertura altri reparti</summary><div class="cfg-body"><div class="tw"><table><thead><tr><th>Reparto</th><th>Richieste</th><th>Coperte</th><th>Stato</th></tr></thead><tbody>${righe}</tbody></table></div></div></details>${dettagli}${caricoHtml}`;
+}
+function renderVistaPersoneAppalto(righe){
+  const gruppi=new Map();righe.forEach(r=>{const k=r.id_dipendente?'id-'+r.id_dipendente:'nome-'+r.nome;if(!gruppi.has(k))gruppi.set(k,{nome:r.nome||'Da assegnare',righe:[]});gruppi.get(k).righe.push(r);});
+  const html=[...gruppi.values()].sort((a,b)=>a.nome.localeCompare(b.nome)).map(g=>{g.righe.sort((a,b)=>a.inizio.localeCompare(b.inizio));const conflitto=g.righe.some(conflittiRigaAppalto);return `<tr><td><b>${g.nome}</b></td><td>${g.righe.map(r=>`${r.inizio}–${r.fine} · ${r.reparto||'—'} / ${r.attivita||'—'}`).join('<br>')}</td><td>${g.righe.reduce((s,r)=>s+durataTurno(r),0).toFixed(1)} h</td><td>${conflitto?'<span class="pill pr">Sovrapposizione</span>':'<span class="pill pg">Orari coerenti</span>'}</td></tr>`;}).join('');
+  return `<div class="tw"><table><thead><tr><th>Persona</th><th>Sequenza della giornata</th><th>Ore</th><th>Controllo</th></tr></thead><tbody>${html||'<tr><td colspan="4" class="empty">Nessun turno nel filtro selezionato.</td></tr>'}</tbody></table></div>`;
+}
+function renderCorpoAppalto(){
+  const body=document.getElementById('appalto-body');if(!body)return;const settimana=APPALTO_SETTIMANE[APPALTO_LUNEDI];
+  const msg=document.getElementById('appalto-msg');if(msg)msg.innerHTML=APPALTO_MSG?`<div class="alert ${APPALTO_MSG.startsWith('Errore')?'aerr':'aok'}">${APPALTO_MSG}</div>`:'';
+  if(!settimana){const of=document.getElementById('appalto-of'),controlli=document.getElementById('appalto-controlli'),personale=document.getElementById('appalto-personale');if(of)of.innerHTML='';if(controlli)controlli.innerHTML='';if(personale)personale.innerHTML='';body.innerHTML='<div class="empty">Nessuna programmazione per questa settimana. Usa “Crea dalla settimana precedente”.</div>';return;}
+  const tutteGiorno=settimana.righe.filter(r=>r.giorno===APPALTO_GIORNO);renderRiepilogoOrtofruttaAppalto(tutteGiorno);renderControlliRepartiAppalto(settimana.righe);renderDisponibilitaPersonaleAppalto(tutteGiorno);
+  let righe=tutteGiorno.filter(r=>APPALTO_REPARTO==='Tutti'||r.reparto===APPALTO_REPARTO);
+  const assenti=righe.filter(r=>r.tipo==='standard'&&turnoAssente(r)&&!sostituzioneEsistente(r.uid));if(APPALTO_SOLO_ASSENTI)righe=assenti;
+  const nonCollegati=righe.filter(r=>!r.id_dipendente||!r.id_reparto||!r.id_attivita).length,conflitti=righe.filter(r=>conflittiRigaAppalto(r).length).length;
+  if(APPALTO_VISTA_PERSONE){body.innerHTML=`<div class="stats"><div class="stat"><div class="n">${righe.length}</div><div class="l">Fasce mostrate</div></div><div class="stat ${assenti.length?'err':''}"><div class="n">${assenti.length}</div><div class="l">Da sostituire</div></div><div class="stat ${conflitti?'err':''}"><div class="n">${conflitti}</div><div class="l">Fasce sovrapposte</div></div></div>${renderVistaPersoneAppalto(righe)}`;return;}
+  const html=righe.sort((a,b)=>a.inizio.localeCompare(b.inizio)||String(a.nome).localeCompare(String(b.nome))).map(r=>{
+    const ass=turnoAssente(r),sost=sostituzioneEsistente(r.uid),conflitto=conflittiRigaAppalto(r).length;let stato=r.tipo==='sostituzione'?'<span class="pill pb">Sostituzione</span>':'<span class="pill pg">Standard</span>';
+    if(ass)stato=sost?'<span class="pill py">Assenza coperta</span>':'<span class="pill pr">Da sostituire</span>';if(conflitto)stato+=' <span class="pill pr">Sovrapposti</span>';
+    let azione='';if(ass&&r.tipo==='standard'&&!sost){const cand=candidatiSostituzione(r);azione=`<select onchange="if(this.value)sostituisciTurno('${r.uid}',this.value)"><option value="">Scegli sostituto…</option>${cand.map(d=>`<option value="${d.ID_Dipendente}">${d.Nome}</option>`).join('')}</select> `;}
+    azione+=`<button class="btn bo bsm" title="Aggiungi un'altra mansione" aria-label="Aggiungi un'altra mansione" onclick="aggiungiMansioneAppalto('${r.uid}')">＋</button> `;
+    if(r.tipo==='sostituzione'){if(r.sostituisce)azione+=`<button class="btn bo bsm" onclick="rendiSostituzioneStandard('${r.uid}')">Rendi standard</button> `;azione+=`<button class="btn br bsm" onclick="rimuoviSostituzione('${r.uid}')">Rimuovi</button>`;}else azione+=`<button class="btn br bsm" onclick="eliminaFasciaAppalto('${r.uid}')">Elimina</button>`;
+    return `<tr><td>${stato}${ass?'<br><small>'+motivoAssenza(ass)+'</small>':''}</td><td>${opzioniDipendenteAppalto(r)}</td><td><input type="time" value="${r.inizio||''}" onchange="aggiornaRigaAppalto('${r.uid}','inizio',this.value)">–<input type="time" value="${r.fine||''}" onchange="aggiornaRigaAppalto('${r.uid}','fine',this.value)"></td><td>${opzioniRepartoAppalto(r)}</td><td>${opzioniAttivitaAppalto(r)}</td><td>${durataTurno(r).toFixed(1)} h</td><td class="no-print" style="white-space:nowrap;">${azione}</td></tr>`;
+  }).join('');
+  body.innerHTML=`<div class="stats"><div class="stat"><div class="n">${righe.length}</div><div class="l">Fasce mostrate</div></div><div class="stat ${assenti.length?'err':''}"><div class="n">${assenti.length}</div><div class="l">Da sostituire</div></div><div class="stat ${conflitti?'err':''}"><div class="n">${conflitti}</div><div class="l">Fasce sovrapposte</div></div><div class="stat ${nonCollegati?'warn':''}"><div class="n">${nonCollegati}</div><div class="l">Dati da collegare</div></div></div><div class="tw"><table><thead><tr><th>Stato</th><th>Persona</th><th>Orario</th><th>Reparto</th><th>Attività</th><th>Ore</th><th class="no-print">Azione</th></tr></thead><tbody>${html||'<tr><td colspan="7" class="empty">Nessun turno nel filtro selezionato.</td></tr>'}</tbody></table></div>`;
+}
+function creaDaSettimanaPrecedente(){
+  const precedente=addGiorni(APPALTO_LUNEDI,-7);let base=APPALTO_SETTIMANE[precedente];
+  if(!base&&precedente==='2026-09-14'){importaPdfComeSettimana(precedente);base=APPALTO_SETTIMANE[precedente];}
+  if(!base){toast('La settimana precedente non è disponibile localmente.','warn');return;}
+  if(APPALTO_SETTIMANE[APPALTO_LUNEDI]&&!confirm('Sostituire la bozza locale già presente per questa settimana?'))return;
+  let seq=0;const righe=base.righe.filter(r=>r.tipo!=='sostituzione').map(r=>({...structuredClone(r),uid:'std-'+Date.now()+'-'+seq++,tipo:'standard',sostituisce:undefined}));
+  APPALTO_SETTIMANE[APPALTO_LUNEDI]={stato:'bozza',origine:'Settimana precedente '+precedente,righe};salvaSettimaneAppalto();caricaSettimanaAppalto(APPALTO_LUNEDI);APPALTO_MSG='Settimana creata dalla precedente; le sostituzioni temporanee non sono state copiate.';renderCorpoAppalto();controllaAssenzeAppalto();
+}
+async function controllaAssenzeAppalto(){
+  if(!SB_URL.includes('eqtyfnluswalfassmlxd')){APPALTO_MSG='Errore: project ID Supabase non valido.';renderCorpoAppalto();return;}
+  const settimana=APPALTO_SETTIMANE[APPALTO_LUNEDI];if(!settimana){toast('Prima crea la settimana.','warn');return;}
+  const ids=[...new Set(DIPENDENTI.map(r=>r.ID_Dipendente).filter(Boolean))];if(!ids.length){APPALTO_MSG='Nessun dipendente attivo associato al magazzino di Cassano.';renderCorpoAppalto();return;}
+  const date=[...Array(8)].map((_,i)=>addGiorni(APPALTO_LUNEDI,i));
+  const{data,error}=await sb.from('Assenze').select('*').in('ID_Dipendente',ids).in('Data',date);
+  if(error){APPALTO_MSG='Errore nel controllo assenze: '+error.message;renderCorpoAppalto();return;}
+  APPALTO_ASSENZE=new Map((data||[]).map(a=>[chiaveAssenza(a.ID_Dipendente,a.Data),a]));APPALTO_ASSENZE_VERIFICATE=true;APPALTO_MSG='Controllo completato in sola lettura su tutto il personale Cassano: '+(data||[]).length+' assenze/ferie trovate nelle date interessate.';renderCorpoAppalto();
+}
+function sostituisciTurno(uid,id){
+  const settimana=APPALTO_SETTIMANE[APPALTO_LUNEDI],originale=settimana?.righe.find(r=>r.uid===uid),dip=DIPENDENTI.find(d=>String(d.ID_Dipendente)===String(id));if(!originale||!dip)return;
+  settimana.righe.push({...structuredClone(originale),uid:'sost-'+Date.now(),nome:dip.Nome,id_dipendente:dip.ID_Dipendente,tipo:'sostituzione',sostituisce:uid});salvaSettimaneAppalto();renderCorpoAppalto();
+}
+function rimuoviSostituzione(uid){const s=APPALTO_SETTIMANE[APPALTO_LUNEDI];s.righe=s.righe.filter(r=>r.uid!==uid);salvaSettimaneAppalto();renderCorpoAppalto();}
+function rendiSostituzioneStandard(uid){
+  const s=APPALTO_SETTIMANE[APPALTO_LUNEDI],r=s.righe.find(x=>x.uid===uid),orig=r&&s.righe.find(x=>x.uid===r.sostituisce);if(!r||!orig)return;orig.nome=r.nome;orig.id_dipendente=r.id_dipendente;s.righe=s.righe.filter(x=>x.uid!==uid);salvaSettimaneAppalto();renderCorpoAppalto();
+}
+
+
+let PROG_SETTIMANA=[]; // 8 giorni: {data,label,righe:[{id_dipendente,nome,extra,assente,turni:[{id_reparto,id_attivita,inizio,fine}×2]}]}
+let PROG_GIORNO_ATTIVO=0;
+let PROG_OBIETTIVI={}; // ID_Attivita -> ObiettivoColliOra
+let PROG_PREVISIONI={}; // Data -> ColliPrevisti
+let PROG_DISTRIB_RICEVIMENTO={}; // GiornoIndice (0-7) -> Percentuale
+let PROG_PARAMETRI={percLegaggio:0,percNavetta:0}; // percentuali su ore necessarie Ventilazione
+
+async function renderProgrammazioneTab(){
+  const oggi=new Date().toISOString().slice(0,10);
+  const lun=lunediSettimana(oggi);
+  document.getElementById('mc').innerHTML=`
+  <div class="card">
+    <div class="ct">Programmazione turni — giorno per giorno</div>
+    <div class="fg no-print" style="max-width:220px;margin-bottom:14px;"><label>Lunedì della settimana</label>
+      <input type="date" id="prog-lun" value="${lun}" onchange="caricaProgrammazioneSettimana()"></div>
+    <div class="brow no-print">
+      <button class="btn bv bsm" onclick="salvaProgrammazione()">💾 Salva tutta la settimana</button>
+      <button class="btn bo bsm" onclick="window.print()">🖨 Stampa</button>
+      <button class="btn bo bsm" onclick="aggiungiRigaExtra()">+ Aggiungi persona extra (giorno attivo)</button>
+    </div>
+    <div id="prog-msg"></div>
+    <div id="prog-tabs"></div>
+    <div id="prog-riepilogo"></div>
+    <div id="prog-body"><div class="loading">⏳ Caricamento...</div></div>
+  </div>`;
+  await caricaProgrammazioneSettimana();
+}
+
+async function caricaProgrammazioneSettimana(){
+  const lun=document.getElementById('prog-lun').value;
+  const dates=[...Array(8)].map((_,i)=>addGiorni(lun,i));
+
+  const coreIds=DIPENDENTI.map(d=>d.ID_Dipendente);
+
+  const{data:esistenti,error:e1}=await sb.from('TurniOrtofruttaPianificati').select('*').in('Data',dates);
+  if(e1){document.getElementById('prog-body').innerHTML=`<div class="alert aerr">Errore: ${e1.message}. Hai eseguito aggiorna_turni_pianificati.sql?</div>`;return;}
+
+  const{data:assenze}=await sb.from('Assenze').select('*').in('ID_Dipendente',coreIds).in('Data',dates);
+  const assenzeSet=new Set((assenze||[]).map(a=>a.ID_Dipendente+'|'+a.Data));
+
+  const{data:obiettivi}=await sb.from('ObiettiviAttivitaOrtofrutta').select('*');
+  PROG_OBIETTIVI={};
+  (obiettivi||[]).forEach(o=>{PROG_OBIETTIVI[o.ID_Attivita]=Number(o.ObiettivoColliOra)||0;});
+
+  const{data:previsioni}=await sb.from('PrevisioneColliOrtofrutta').select('*').in('Data',dates);
+  PROG_PREVISIONI={};
+  (previsioni||[]).forEach(p=>{PROG_PREVISIONI[p.Data]=Number(p.ColliPrevisti)||0;});
+
+  const{data:distrib}=await sb.from('DistribuzioneRicevimentoOrtofrutta').select('*');
+  PROG_DISTRIB_RICEVIMENTO={};
+  (distrib||[]).forEach(d=>{PROG_DISTRIB_RICEVIMENTO[d.GiornoIndice]=Number(d.Percentuale)||0;});
+
+  const{data:parametri}=await sb.from('ParametriOrtofrutta').select('*').eq('ID',1).maybeSingle();
+  PROG_PARAMETRI={
+    percLegaggio:Number(parametri?.PercentualeLegaggio)||0,
+    percNavetta:Number(parametri?.PercentualeNavetta)||0
+  };
+
+  const dipById={};
+  DIPENDENTI.forEach(d=>{dipById[d.ID_Dipendente]=d;});
+
+  PROG_SETTIMANA=dates.map((data,gi)=>{
+    const turniGiorno=(esistenti||[]).filter(t=>t.Data===data);
+    const idsExtra=[...new Set(turniGiorno.map(t=>t.ID_Dipendente).filter(id=>!coreIds.includes(id)))];
+    const idsPersone=[...coreIds,...idsExtra].filter(id=>dipById[id]);
+    const righe=idsPersone.map(id=>{
+      const turniPersona=turniGiorno.filter(t=>t.ID_Dipendente===id).sort((a,b)=>(a.NumeroTurno||1)-(b.NumeroTurno||1));
+      const t1=turniPersona.find(t=>(t.NumeroTurno||1)===1);
+      const t2=turniPersona.find(t=>(t.NumeroTurno||1)===2);
+      return{
+        id_dipendente:id,nome:dipById[id].Nome,extra:!coreIds.includes(id),
+        assente:assenzeSet.has(id+'|'+data),
+        turni:[
+          {id_reparto:t1?.ID_Reparto?String(t1.ID_Reparto):'',id_attivita:t1?.ID_Attivita?String(t1.ID_Attivita):'',inizio:t1?.OraInizio||'',fine:t1?.OraFine||''},
+          {id_reparto:t2?.ID_Reparto?String(t2.ID_Reparto):'',id_attivita:t2?.ID_Attivita?String(t2.ID_Attivita):'',inizio:t2?.OraInizio||'',fine:t2?.OraFine||''}
+        ]
+      };
+    });
+    return{data,label:ETICHETTE_TAB[gi],righe};
+  });
+
+  PROG_GIORNO_ATTIVO=0;
+  renderProgrammazioneTabs();
+}
+
+function renderProgrammazioneTabs(){
+  document.getElementById('prog-tabs').innerHTML=`<div class="daytabs no-print">
+    ${PROG_SETTIMANA.map((g,i)=>`<button class="daytab ${i===PROG_GIORNO_ATTIVO?'on':''}" onclick="selezionaGiornoProg(${i})">${g.label}<br><small>${fmtDataIt(g.data)}</small></button>`).join('')}
+  </div>`;
+  renderGiornoAttivo();
+}
+
+function selezionaGiornoProg(i){
+  PROG_GIORNO_ATTIVO=i;
+  renderProgrammazioneTabs();
+}
+
+function orarioAMinuti(s){
+  const m=String(s).match(/^(\d{1,2}):(\d{2})$/);
+  if(!m)return null;
+  return parseInt(m[1],10)*60+parseInt(m[2],10);
+}
+
+function durataTurno(t){
+  if(!t.inizio||!t.fine)return 0;
+  const i=orarioAMinuti(t.inizio),f=orarioAMinuti(t.fine);
+  if(i==null||f==null)return 0;
+  let ore=(f-i)/60;
+  if(ore<0)ore+=24; // difensivo: non dovrebbe servire, il turno che passa la mezzanotte va sul giorno successivo (Lunedì +1)
+  return ore;
+}
+
+function oreRiga(riga){
+  if(riga.assente)return 0;
+  return durataTurno(riga.turni[0])+durataTurno(riga.turni[1]);
+}
+
+function selectReparto(ri,ti,valore){
+  const opz=REPARTI.map(r=>`<option value="${r.ID_Reparto}" ${String(r.ID_Reparto)===valore?'selected':''}>${nomeReparto(r)}</option>`).join('');
+  return `<select id="prog-rep-${ri}-${ti}" onchange="onCambiaReparto(${ri},${ti},this.value)"><option value="">—</option>${opz}</select>`;
+}
+
+function selectAttivita(ri,ti,idReparto,valore){
+  const opz=attivitaDiReparto(idReparto).map(a=>`<option value="${a.ID_Attivita}" ${String(a.ID_Attivita)===valore?'selected':''}>${nomeAttivita(a)}</option>`).join('');
+  return `<select id="prog-att-${ri}-${ti}" onchange="onCambiaCella(${ri},${ti},'id_attivita',this.value)" ${idReparto?'':'disabled'}>${idReparto?`<option value="">—</option>${opz}`:'<option value="">scegli reparto</option>'}</select>`;
+}
+
+function renderGiornoAttivo(){
+  const giorno=PROG_SETTIMANA[PROG_GIORNO_ATTIVO];
+  if(!giorno){document.getElementById('prog-body').innerHTML='';return;}
+
+  const righeHtml=giorno.righe.map((r,ri)=>{
+    const t1=r.turni[0],t2=r.turni[1];
+    return `<tr class="${r.assente?'rigaassente':''}" id="prog-riga-${ri}">
+      <td class="nome">${r.nome}${r.extra?' <span class="pill py" style="font-size:0.6rem;">extra</span>':''}</td>
+      <td><input type="checkbox" onchange="onToggleAssente(${ri},this.checked)" ${r.assente?'checked':''}></td>
+      <td>${selectReparto(ri,0,t1.id_reparto)}</td>
+      <td>${selectAttivita(ri,0,t1.id_reparto,t1.id_attivita)}</td>
+      <td><input type="time" value="${t1.inizio}" onchange="onCambiaCella(${ri},0,'inizio',this.value)"></td>
+      <td><input type="time" value="${t1.fine}" onchange="onCambiaCella(${ri},0,'fine',this.value)"></td>
+      <td class="turno2col">${selectReparto(ri,1,t2.id_reparto)}</td>
+      <td>${selectAttivita(ri,1,t2.id_reparto,t2.id_attivita)}</td>
+      <td><input type="time" value="${t2.inizio}" onchange="onCambiaCella(${ri},1,'inizio',this.value)"></td>
+      <td><input type="time" value="${t2.fine}" onchange="onCambiaCella(${ri},1,'fine',this.value)"></td>
+      <td id="prog-ore-${ri}" style="font-weight:700;text-align:center;">${oreRiga(r).toFixed(1)}</td>
+      <td class="no-print">${r.extra?`<button class="br" onclick="rimuoviRigaExtra(${ri})">×</button>`:''}</td>
+    </tr>`;
+  }).join('');
+
+  document.getElementById('prog-body').innerHTML=`
+  <div class="tw"><table class="turnigrid2">
+    <thead><tr>
+      <th>Persona</th><th>Assente</th>
+      <th colspan="4">Turno 1</th>
+      <th colspan="4" class="turno2col">Turno 2</th>
+      <th>Ore</th><th class="no-print"></th>
+    </tr>
+    <tr>
+      <th></th><th></th>
+      <th>Reparto</th><th>Attività</th><th>Inizio</th><th>Fine</th>
+      <th class="turno2col">Reparto</th><th>Attività</th><th>Inizio</th><th>Fine</th>
+      <th></th><th class="no-print"></th>
+    </tr></thead>
+    <tbody>${righeHtml||'<tr><td colspan="12" class="empty">Nessun dipendente attivo associato al magazzino di Cassano.</td></tr>'}</tbody>
+  </table></div>`;
+
+  renderRiepilogoGiorno();
+}
+
+function onCambiaReparto(ri,ti,valore){
+  const giorno=PROG_SETTIMANA[PROG_GIORNO_ATTIVO];
+  giorno.righe[ri].turni[ti].id_reparto=valore;
+  giorno.righe[ri].turni[ti].id_attivita=''; // cambiando reparto, l'attività va riscelta
+  document.getElementById(`prog-att-${ri}-${ti}`).outerHTML=selectAttivita(ri,ti,valore,'');
+  renderRiepilogoGiorno();
+}
+
+function onCambiaCella(ri,ti,campo,valore){
+  const giorno=PROG_SETTIMANA[PROG_GIORNO_ATTIVO];
+  giorno.righe[ri].turni[ti][campo]=valore;
+  const oreEl=document.getElementById('prog-ore-'+ri);
+  if(oreEl)oreEl.textContent=oreRiga(giorno.righe[ri]).toFixed(1);
+  renderRiepilogoGiorno();
+}
+
+function onToggleAssente(ri,checked){
+  const giorno=PROG_SETTIMANA[PROG_GIORNO_ATTIVO];
+  giorno.righe[ri].assente=checked;
+  document.getElementById('prog-riga-'+ri).classList.toggle('rigaassente',checked);
+  const oreEl=document.getElementById('prog-ore-'+ri);
+  if(oreEl)oreEl.textContent=oreRiga(giorno.righe[ri]).toFixed(1);
+  renderRiepilogoGiorno();
+}
+
+function renderRiepilogoGiorno(){
+  const giorno=PROG_SETTIMANA[PROG_GIORNO_ATTIVO];
+  const colliPrevisti=PROG_PREVISIONI[giorno.data];
+
+  // Ventilazione pura (il Legaggio ha già il suo rapporto percentuale a parte, sotto)
+  const orePiazzateVent=giorno.righe.reduce((tot,r)=>{
+    if(r.assente)return tot;
+    return tot+r.turni.filter(t=>String(t.id_attivita)===String(ID_ATTIVITA_VENTILAZIONE)).reduce((s,t)=>s+durataTurno(t),0);
+  },0);
+  const obiettivoVent=PROG_OBIETTIVI[ID_ATTIVITA_VENTILAZIONE];
+  let oreNecVent=null,completamentoVent=null;
+  if(obiettivoVent>0&&colliPrevisti!=null){
+    oreNecVent=colliPrevisti/obiettivoVent;
+    completamentoVent=oreNecVent>0?(orePiazzateVent/oreNecVent*100):null;
+  }
+  const clsVent=completamentoVent==null?'':(completamentoVent>=100?'pg':(completamentoVent>=80?'py':'pr'));
+
+  // Ricevimento: colli Ortofrutta della settimana (i 7 giorni "veri" Lun-Dom, esclude Lunedì+1) ÷ obiettivo settimanale,
+  // poi spalmato sul giorno attivo con la percentuale impostata in Configurazione
+  const colliSettimanali=PROG_SETTIMANA.slice(0,7).reduce((tot,g)=>tot+(PROG_PREVISIONI[g.data]||0),0);
+  const obiettivoRic=PROG_OBIETTIVI[ID_ATTIVITA_RICEVIMENTO];
+  const oreSettimanaliRic=(obiettivoRic>0)?(colliSettimanali/obiettivoRic):null;
+  const percRicGiorno=PROG_DISTRIB_RICEVIMENTO[PROG_GIORNO_ATTIVO];
+  const budgetRic=(oreSettimanaliRic!=null&&percRicGiorno!=null)?(oreSettimanaliRic*percRicGiorno/100):null;
+  const oreRic=giorno.righe.reduce((tot,r)=>{
+    if(r.assente)return tot;
+    return tot+r.turni.filter(t=>String(t.id_attivita)===String(ID_ATTIVITA_RICEVIMENTO)).reduce((s,t)=>s+durataTurno(t),0);
+  },0);
+  const compRic=(budgetRic>0)?(oreRic/budgetRic*100):null;
+  const clsRic=compRic==null?'':(compRic>=100?'pg':(compRic>=80?'py':'pr'));
+
+  // Legaggio e Navetta: budget calcolato come percentuale delle ore necessarie di Ventilazione di quel giorno
+  const budgetLeg=(oreNecVent!=null)?(oreNecVent*PROG_PARAMETRI.percLegaggio/100):null;
+  const oreLeg=giorno.righe.reduce((tot,r)=>{
+    if(r.assente)return tot;
+    return tot+r.turni.filter(t=>String(t.id_attivita)===String(ID_ATTIVITA_LEGAGGIO)).reduce((s,t)=>s+durataTurno(t),0);
+  },0);
+  const compLeg=(budgetLeg>0)?(oreLeg/budgetLeg*100):null;
+  const clsLeg=compLeg==null?'':(compLeg>=100?'pg':(compLeg>=80?'py':'pr'));
+
+  const budgetNav=(oreNecVent!=null)?(oreNecVent*PROG_PARAMETRI.percNavetta/100):null;
+  const oreNav=ID_ATTIVITA_NAVETTA?giorno.righe.reduce((tot,r)=>{
+    if(r.assente)return tot;
+    return tot+r.turni.filter(t=>String(t.id_attivita)===String(ID_ATTIVITA_NAVETTA)).reduce((s,t)=>s+durataTurno(t),0);
+  },0):null;
+  const compNav=(budgetNav>0&&oreNav!=null)?(oreNav/budgetNav*100):null;
+  const clsNav=compNav==null?'':(compNav>=100?'pg':(compNav>=80?'py':'pr'));
+
+  // Media colli/ora sull'intero reparto Ortofrutta (tutte le attività di quel reparto, non solo Ventilazione+Legaggio)
+  const oreTotaliReparto=giorno.righe.reduce((tot,r)=>{
+    if(r.assente)return tot;
+    return tot+r.turni.filter(t=>String(t.id_reparto)===String(ID_REPARTO_ORTOFRUTTA)).reduce((s,t)=>s+durataTurno(t),0);
+  },0);
+  const mediaReparto=(colliPrevisti!=null&&oreTotaliReparto>0)?(colliPrevisti/oreTotaliReparto):null;
+  const sogliaReparto=Number(CONFIG_APPALTO.sogliaProduttivita)||115;
+  const clsMedia=mediaReparto==null?'':(mediaReparto>=sogliaReparto?'pg':'pr');
+
+  document.getElementById('prog-riepilogo').innerHTML=`
+    <div class="card" style="background:var(--sfondo);margin-bottom:14px;">
+      <div class="ct" style="margin-bottom:8px;">Completamento turno — ${giorno.label} (${fmtDataIt(giorno.data)})${colliPrevisti==null?' · <span style="color:var(--rosso);">nessuna previsione colli Ortofrutta per questo giorno</span>':' · previsti '+colliPrevisti+' colli'}</div>
+      <div class="tw"><table><thead><tr><th>Attività</th><th>Ore necessarie / budget</th><th>Ore piazzate</th><th>Completamento</th></tr></thead><tbody>
+        <tr>
+          <td>Ventilazione</td>
+          <td>${oreNecVent!=null?oreNecVent.toFixed(1)+' h':'—'}</td>
+          <td>${orePiazzateVent.toFixed(1)} h</td>
+          <td>${completamentoVent!=null?`<span class="pill ${clsVent}">${completamentoVent.toFixed(0)}%</span>`:'—'}</td>
+        </tr>
+        <tr>
+          <td>Ricevimento <small style="color:var(--grigio);">(${colliSettimanali} colli/sett. ÷ obiettivo, ${percRicGiorno??'?'}% su questo giorno)</small></td>
+          <td>${budgetRic!=null?budgetRic.toFixed(1)+' h':'— imposta obiettivo e percentuali in Configurazione'}</td>
+          <td>${oreRic.toFixed(1)} h</td>
+          <td>${compRic!=null?`<span class="pill ${clsRic}">${compRic.toFixed(0)}%</span>`:'—'}</td>
+        </tr>
+        <tr>
+          <td>Legaggio <small style="color:var(--grigio);">(${PROG_PARAMETRI.percLegaggio}% delle ore Ventilazione)</small></td>
+          <td>${budgetLeg!=null?budgetLeg.toFixed(1)+' h':'—'}</td>
+          <td>${oreLeg.toFixed(1)} h</td>
+          <td>${compLeg!=null?`<span class="pill ${clsLeg}">${compLeg.toFixed(0)}%</span>`:'—'}</td>
+        </tr>
+        <tr>
+          <td>Navetta <small style="color:var(--grigio);">(${PROG_PARAMETRI.percNavetta}% delle ore Ventilazione)</small></td>
+          <td>${budgetNav!=null?budgetNav.toFixed(1)+' h':'—'}</td>
+          <td>${oreNav!=null?oreNav.toFixed(1)+' h':'— attività "Navetta" non trovata nel catalogo'}</td>
+          <td>${compNav!=null?`<span class="pill ${clsNav}">${compNav.toFixed(0)}%</span>`:'—'}</td>
+        </tr>
+      </tbody></table></div>
+      <div style="margin-top:10px;font-size:0.82rem;">
+        Media reparto Ortofrutta: ${oreTotaliReparto.toFixed(1)} h totali ${colliPrevisti!=null?'÷ '+colliPrevisti+' colli':''} =
+        ${mediaReparto!=null?`<span class="pill ${clsMedia}">${mediaReparto.toFixed(1)} colli/ora ${mediaReparto>=sogliaReparto?'✔ ok':`✗ sotto i ${sogliaReparto}`}</span>`:'—'}
+      </div>
+    </div>`;
+}
+
+function aggiungiRigaExtra(){
+  const giorno=PROG_SETTIMANA[PROG_GIORNO_ATTIVO];
+  const disponibili=DIPENDENTI.filter(d=>!giorno.righe.some(r=>r.id_dipendente===d.ID_Dipendente));
+  if(!disponibili.length){toast('Nessun altro dipendente disponibile.','warn');return;}
+  const nome=prompt(`Nome dipendente da aggiungere (extra) su ${giorno.label} ${fmtDataIt(giorno.data)}:\n`+disponibili.map(d=>d.Nome).join(', '));
+  const dip=disponibili.find(d=>d.Nome.toLowerCase()===((nome||'').toLowerCase()));
+  if(!dip){toast('Dipendente non trovato tra quelli disponibili.','err');return;}
+  giorno.righe.push({id_dipendente:dip.ID_Dipendente,nome:dip.Nome,extra:true,assente:false,turni:[{id_reparto:'',id_attivita:'',inizio:'',fine:''},{id_reparto:'',id_attivita:'',inizio:'',fine:''}]});
+  renderGiornoAttivo();
+}
+
+function rimuoviRigaExtra(ri){
+  const giorno=PROG_SETTIMANA[PROG_GIORNO_ATTIVO];
+  giorno.righe.splice(ri,1);
+  renderGiornoAttivo();
+}
+
+async function salvaProgrammazione(){
+  const righe=[];
+  const idsTutti=new Set();
+  PROG_SETTIMANA.forEach(giorno=>{
+    giorno.righe.forEach(r=>{
+      idsTutti.add(r.id_dipendente);
+      if(r.assente)return;
+      r.turni.forEach((t,ti)=>{
+        if(!t.inizio||!t.fine)return;
+        const ore=durataTurno(t);
+        righe.push({
+          Data:giorno.data,ID_Dipendente:r.id_dipendente,
+          ID_Reparto:t.id_reparto?parseInt(t.id_reparto,10):null,
+          ID_Attivita:t.id_attivita?parseInt(t.id_attivita,10):null,
+          OraInizio:t.inizio,OraFine:t.fine,OreTurno:ore,NumeroTurno:ti+1
+        });
+      });
+    });
+  });
+  const dates=PROG_SETTIMANA.map(g=>g.data);
+  // Rimuovo prima i turni esistenti della settimana (8 giorni) per le persone toccate, poi reinserisco (evita duplicati/residui)
+  await sb.from('TurniOrtofruttaPianificati').delete().in('Data',dates).in('ID_Dipendente',[...idsTutti]);
+  if(!righe.length){document.getElementById('prog-msg').innerHTML='<div class="alert awarn">Nessun turno da salvare (griglia vuota).</div>';return;}
+  const{error}=await sb.from('TurniOrtofruttaPianificati').insert(righe);
+  document.getElementById('prog-msg').innerHTML=error?`<div class="alert aerr">Errore: ${error.message}</div>`:`<div class="alert aok">✔ Programmazione salvata (${righe.length} turni su ${dates.length} giorni).</div>`;
+}
+avviaApp();
+</script>
+</body>
+</html>
