@@ -115,6 +115,7 @@ tr:hover td{background:#f5fbf7;}
 .pdf-shift b{color:var(--p);}
 .azioni-turno{display:flex;flex-direction:column;align-items:center;gap:4px;min-width:36px;}
 .azioni-turno .btn-icona{width:32px;height:28px;padding:0;justify-content:center;font-size:1rem;line-height:1;}
+.orario-mezzora{min-width:78px;padding:5px 6px;border:1px solid var(--bordo);border-radius:5px;color:var(--testo);background:#fff;}
 
 /* Griglia turni settimanale */
 .turnigrid{border-collapse:collapse;font-size:0.78rem;}
@@ -788,6 +789,9 @@ function conflittiRigaAppalto(r){
   const s=APPALTO_SETTIMANE[APPALTO_LUNEDI];if(!s||!r.id_dipendente)return[];
   return s.righe.filter(x=>x.uid!==r.uid&&String(x.id_dipendente)===String(r.id_dipendente)&&intervalliSovrapposti(x,r));
 }
+function descrizioneConflittiAppalto(r){
+  return conflittiRigaAppalto(r).map(x=>`${ETICHETTE_TAB[Number(x.giorno)]||'Giorno '+(Number(x.giorno)+1)} ${x.inizio}–${x.fine}`).join(', ');
+}
 function candidatiSostituzione(turno){
   const settimana=APPALTO_SETTIMANE[APPALTO_LUNEDI];if(!settimana)return[];const data=addGiorni(APPALTO_LUNEDI,turno.giorno),notte=orarioAMinuti(turno.fine)<=orarioAMinuti(turno.inizio),dataFine=addGiorni(data,1);
   return DIPENDENTI.filter(d=>String(d.ID_Dipendente)!==String(turno.id_dipendente))
@@ -812,6 +816,15 @@ function opzioniAttivitaAppalto(r){
   const corrente=r.id_attivita?String(r.id_attivita):'',elenco=attivitaDiReparto(r.id_reparto);let extra='';
   if(!corrente&&r.attivita)extra=`<option value="" selected>${r.attivita} — da collegare</option>`;
   return `<select onchange="aggiornaRigaAppalto('${r.uid}','attivita',this.value)" ${r.id_reparto?'':'disabled'}>${extra}<option value="" ${!corrente&&!r.attivita?'selected':''}>${r.id_reparto?'Scegli attività…':'Prima il reparto'}</option>${elenco.map(a=>`<option value="${a.ID_Attivita}" ${String(a.ID_Attivita)===corrente?'selected':''}>${nomeAttivita(a)}</option>`).join('')}</select>`;
+}
+function opzioniOrarioMezzora(valore,consentiVuoto=false){
+  const corrente=String(valore||'').slice(0,5),orari=Array.from({length:48},(_,i)=>`${String(Math.floor(i/2)).padStart(2,'0')}:${i%2?'30':'00'}`);
+  if(corrente&&!orari.includes(corrente))orari.push(corrente);
+  orari.sort();
+  return `${consentiVuoto?`<option value="" ${!corrente?'selected':''}>—</option>`:''}${orari.map(o=>`<option value="${o}" ${o===corrente?'selected':''}>${o}</option>`).join('')}`;
+}
+function selettoreOrarioAppalto(r,campo){
+  return `<select class="orario-mezzora" onchange="aggiornaRigaAppalto('${r.uid}','${campo}',this.value)">${opzioniOrarioMezzora(r[campo],campo==='fine')}</select>`;
 }
 function aggiornaRigaAppalto(uid,campo,valore){
   const r=trovaRigaAppalto(uid);if(!r)return;
@@ -922,13 +935,14 @@ function renderCorpoAppalto(){
   const nonCollegati=righe.filter(r=>!r.id_dipendente||!r.id_reparto||!r.id_attivita).length,conflitti=righe.filter(r=>conflittiRigaAppalto(r).length).length;
   if(APPALTO_VISTA_PERSONE){body.innerHTML=`<div class="stats"><div class="stat"><div class="n">${righe.length}</div><div class="l">Fasce mostrate</div></div><div class="stat ${assenti.length?'err':''}"><div class="n">${assenti.length}</div><div class="l">Da sostituire</div></div><div class="stat ${conflitti?'err':''}"><div class="n">${conflitti}</div><div class="l">Fasce sovrapposte</div></div></div>${renderVistaPersoneAppalto(righe)}`;return;}
   const html=righe.sort((a,b)=>String(a.nome||'').localeCompare(String(b.nome||''),'it',{sensitivity:'base'})||String(a.id_dipendente||'').localeCompare(String(b.id_dipendente||''))||String(a.inizio||'').localeCompare(String(b.inizio||''))).map(r=>{
-    const ass=turnoAssente(r),sost=sostituzioneEsistente(r.uid),conflitto=conflittiRigaAppalto(r).length;let stato=r.tipo==='sostituzione'?'<span class="pill pb">Sostituzione</span>':'<span class="pill pg">Standard</span>';
+    const ass=turnoAssente(r),sost=sostituzioneEsistente(r.uid),dettaglioConflitto=descrizioneConflittiAppalto(r),conflitto=!!dettaglioConflitto;let stato=r.tipo==='sostituzione'?'<span class="pill pb">Sostituzione</span>':'<span class="pill pg">Standard</span>';
     if(ass)stato=sost?'<span class="pill py">Assenza coperta</span>':'<span class="pill pr">Da sostituire</span>';if(conflitto)stato+=' <span class="pill pr">Sovrapposti</span>';
+    if(conflitto)stato+=`<br><small>Con: ${dettaglioConflitto}</small>`;
     let azione='';if(ass&&r.tipo==='standard'&&!sost){const cand=candidatiSostituzione(r);azione=`<select onchange="if(this.value)sostituisciTurno('${r.uid}',this.value)"><option value="">Scegli sostituto…</option>${cand.map(d=>`<option value="${d.ID_Dipendente}">${d.Nome}</option>`).join('')}</select> `;}
     let bottoni=`<button class="btn bo bsm btn-icona" title="Aggiungi un'altra mansione" aria-label="Aggiungi un'altra mansione" onclick="aggiungiMansioneAppalto('${r.uid}')">＋</button>`;
     if(r.tipo==='sostituzione'){if(r.sostituisce)bottoni+=`<button class="btn bo bsm" onclick="rendiSostituzioneStandard('${r.uid}')">Rendi standard</button>`;bottoni+=`<button class="btn br bsm btn-icona" title="Elimina fascia" aria-label="Elimina fascia" onclick="rimuoviSostituzione('${r.uid}')">−</button>`;}else bottoni+=`<button class="btn br bsm btn-icona" title="Elimina fascia" aria-label="Elimina fascia" onclick="eliminaFasciaAppalto('${r.uid}')">−</button>`;
     azione+=`<div class="azioni-turno">${bottoni}</div>`;
-    return `<tr><td>${stato}${ass?'<br><small>'+motivoAssenza(ass)+'</small>':''}</td><td>${opzioniDipendenteAppalto(r)}</td><td><input type="time" value="${r.inizio||''}" onchange="aggiornaRigaAppalto('${r.uid}','inizio',this.value)">–<input type="time" value="${r.fine||''}" onchange="aggiornaRigaAppalto('${r.uid}','fine',this.value)"></td><td>${opzioniRepartoAppalto(r)}</td><td>${opzioniAttivitaAppalto(r)}</td><td>${durataTurno(r).toFixed(1)} h</td><td class="no-print">${azione}</td></tr>`;
+    return `<tr><td>${stato}${ass?'<br><small>'+motivoAssenza(ass)+'</small>':''}</td><td>${opzioniDipendenteAppalto(r)}</td><td>${selettoreOrarioAppalto(r,'inizio')}–${selettoreOrarioAppalto(r,'fine')}</td><td>${opzioniRepartoAppalto(r)}</td><td>${opzioniAttivitaAppalto(r)}</td><td>${durataTurno(r).toFixed(1)} h</td><td class="no-print">${azione}</td></tr>`;
   }).join('');
   body.innerHTML=`<div class="stats"><div class="stat"><div class="n">${righe.length}</div><div class="l">Fasce mostrate</div></div><div class="stat ${assenti.length?'err':''}"><div class="n">${assenti.length}</div><div class="l">Da sostituire</div></div><div class="stat ${conflitti?'err':''}"><div class="n">${conflitti}</div><div class="l">Fasce sovrapposte</div></div><div class="stat ${nonCollegati?'warn':''}"><div class="n">${nonCollegati}</div><div class="l">Dati da collegare</div></div></div><div class="tw"><table><thead><tr><th>Stato</th><th>Persona</th><th>Orario</th><th>Reparto</th><th>Attività</th><th>Ore</th><th class="no-print">Azioni</th></tr></thead><tbody>${html||'<tr><td colspan="7" class="empty">Nessun turno nel filtro selezionato.</td></tr>'}</tbody></table></div>`;
 }
