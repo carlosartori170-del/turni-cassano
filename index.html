@@ -697,19 +697,6 @@ async function salvaSettimanaSupabase(){
   const erroreMap=await salvaMappatureSupabase();if(erroreMap){statoSync('Settimana salvata');toast('Settimana salvata; collegamenti non sincronizzati: '+erroreMap.message,'warn');return;}
   statoSync('Salvata '+APPALTO_LUNEDI);toast('Settimana salvata su Supabase.');
 }
-function esportaBackupAppalto(){
-  const backup={formato:'turni-cassano-backup',versione:1,creato_il:new Date().toISOString(),configurazione:CONFIG_APPALTO,settimane:APPALTO_SETTIMANE,mappature:APPALTO_MAPPING};
-  const blob=new Blob([JSON.stringify(backup,null,2)],{type:'application/json'}),url=URL.createObjectURL(blob),a=document.createElement('a');a.href=url;a.download='backup_turni_cassano_'+new Date().toISOString().slice(0,10)+'.json';document.body.appendChild(a);a.click();a.remove();setTimeout(()=>URL.revokeObjectURL(url),1000);toast('Backup locale esportato.');
-}
-async function importaBackupAppalto(input){
-  const file=input.files?.[0];if(!file)return;
-  try{
-    const backup=JSON.parse(await file.text());if(backup.formato!=='turni-cassano-backup'||!backup.settimane||typeof backup.settimane!=='object')throw new Error('Formato backup non riconosciuto');
-    if(!confirm('Ripristinare settimane, configurazione e collegamenti dal backup selezionato? I dati locali attuali verranno sostituiti.')){input.value='';return;}
-    const map=backup.mappature||{};APPALTO_SETTIMANE=backup.settimane;APPALTO_MAPPING={reparti:map.reparti||{},attivita:map.attivita||{}};localStorage.setItem(CONFIG_APPALTO_KEY,JSON.stringify(backup.configurazione||DEFAULT_CONFIG_APPALTO));CONFIG_APPALTO=caricaConfigAppaltoLocale();salvaSettimaneAppalto();salvaMappatureAppalto();
-    const lun=APPALTO_SETTIMANE[APPALTO_LUNEDI]?APPALTO_LUNEDI:(Object.keys(APPALTO_SETTIMANE).sort().at(-1)||APPALTO_LUNEDI);caricaSettimanaAppalto(lun);APPALTO_MSG='Backup ripristinato correttamente.';renderCorpoAppalto();
-  }catch(e){toast('Backup non importato: '+e.message,'err');}finally{input.value='';}
-}
 function normalizzaNomePlanner(s){return String(s||'').replace(/\([^)]*\)/g,' ').normalize('NFD').replace(/[\u0300-\u036f]/g,'').replace(/[^a-zA-Z0-9]+/g,' ').trim().toLowerCase();}
 function collegaDipendentePlanner(nome){
   const n=normalizzaNomePlanner(nome);if(!n)return null;
@@ -749,7 +736,7 @@ function renderProgrammazioneAppaltoTab(){
   document.getElementById('mc').innerHTML=`<div class="card"><div class="ct">Programmazione dell'intero appalto</div>
     <div class="alert aok">Programmatore unico collegato a Supabase: ogni fascia appartiene alla persona, anche quando nella stessa giornata cambia reparto o attività. Le modifiche restano in bozza sul dispositivo fino a “Salva settimana”.</div>
     <div class="g2 no-print" style="max-width:520px;"><div class="fg"><label>Lunedì della settimana</label><input type="date" id="appalto-lun" value="${APPALTO_LUNEDI}" onchange="caricaSettimanaAppalto(this.value)"></div><div class="fg"><label>Reparto</label><select id="appalto-rep" onchange="APPALTO_REPARTO=this.value;renderCorpoAppalto()"></select></div></div>
-    <div class="brow no-print"><button class="btn bv bsm" onclick="salvaSettimanaSupabase()">💾 Salva settimana</button><button class="btn bp bsm" onclick="creaDaSettimanaPrecedente()">↪ Crea dalla settimana precedente</button><button class="btn bo bsm" onclick="aggiungiFasciaAppalto()">＋ Aggiungi fascia</button><button class="btn bo bsm" onclick="controllaAssenzeAppalto()">🔎 Controlla assenze Nexus</button><button class="btn bo bsm" onclick="APPALTO_SOLO_ASSENTI=!APPALTO_SOLO_ASSENTI;renderCorpoAppalto()">Solo da sostituire</button><button class="btn bo bsm" onclick="APPALTO_VISTA_PERSONE=!APPALTO_VISTA_PERSONE;renderCorpoAppalto()">Vista persone/reparto</button><button class="btn bo bsm" onclick="esportaBackupAppalto()">⇩ Backup</button><button class="btn bo bsm" onclick="document.getElementById('appalto-import').click()">⇧ Ripristina</button><input id="appalto-import" type="file" accept="application/json,.json" style="display:none" onchange="importaBackupAppalto(this)"><button class="btn bo bsm" onclick="window.print()">🖨 Stampa</button></div>
+    <div class="brow no-print"><button class="btn bv bsm" onclick="salvaSettimanaSupabase()">💾 Salva settimana</button><button class="btn bp bsm" onclick="creaDaSettimanaPrecedente()">↪ Crea dalla settimana precedente</button><button class="btn bo bsm" onclick="aggiungiFasciaAppalto()">＋ Aggiungi fascia</button><button class="btn bo bsm" onclick="controllaAssenzeAppalto()">🔎 Controlla assenze Nexus</button><button class="btn bo bsm" onclick="APPALTO_SOLO_ASSENTI=!APPALTO_SOLO_ASSENTI;renderCorpoAppalto()">Solo da sostituire</button><button class="btn bo bsm" onclick="APPALTO_VISTA_PERSONE=!APPALTO_VISTA_PERSONE;renderCorpoAppalto()">Vista persone/reparto</button><button class="btn bo bsm" onclick="window.print()">🖨 Stampa</button></div>
     <div id="appalto-msg"></div><div id="appalto-tabs"></div><div id="appalto-of"></div><div id="appalto-controlli"></div><div id="appalto-personale"></div><div id="appalto-body"></div></div>`;
   caricaSettimanaAppalto(APPALTO_LUNEDI);
 }
