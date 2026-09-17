@@ -169,10 +169,6 @@ tr:hover td{background:#f5fbf7;}
       <svg viewBox="0 0 24 24"><path d="M8 6h13M8 12h13M8 18h13"/><path d="M3 6h.01M3 12h.01M3 18h.01"/></svg>
       Programmazione
     </button>
-    <button id="nav-pdf" onclick="showTab('pdf')">
-      <svg viewBox="0 0 24 24"><path d="M4 4h16v16H4z"/><path d="M4 9h16M9 4v16"/></svg>
-      Bozza PDF SS38
-    </button>
     <button id="nav-controllo" onclick="showTab('controllo')">
       <svg viewBox="0 0 24 24"><path d="M21 16V8a2 2 0 0 0-1-1.73l-7-4a2 2 0 0 0-2 0l-7 4A2 2 0 0 0 3 8v8a2 2 0 0 0 1 1.73l7 4a2 2 0 0 0 2 0l7-4A2 2 0 0 0 21 16z"/><path d="M3.27 6.96L12 12.01l8.73-5.05"/><path d="M12 22.08V12"/></svg>
       Colli Reali & Controllo
@@ -306,7 +302,7 @@ function copiaFabbisognoSettimana(rep){aggiornaFabbisogniDaDom();if(!confirm(`Co
 function renderConfigAppaltoHtml(){
   const carico=GIORNI.map((g,i)=>`<tr><td>${g}</td><td>${inputCfg(`carico.${i}`,CONFIG_APPALTO.carico[i],'number','0.5')} h</td></tr>`).join('');
   const ricevimento=GIORNI.map((g,i)=>`<tr><td>${g}</td><td>${inputCfg(`ricevimento.${i}`,CONFIG_APPALTO.ricevimento?.[i]||0,'number','0.5')} h</td></tr>`).join('');
-  return `<div class="card"><div class="ct">Configurazione appalto — standard settimanali</div><div class="alert awarn">Bozza locale: questi valori restano nel browser e non vengono scritti su Supabase.</div>
+  return `<div class="card"><div class="ct">Configurazione appalto — standard settimanali</div>
     <div class="fg"><label>Soglia produttività Ortofrutta</label><div>${inputCfg('sogliaProduttivita',CONFIG_APPALTO.sogliaProduttivita,'number','0.1')} colli/ora</div></div>
     <details class="cfg-section"><summary>Ortofrutta — budget fisso Ricevimento</summary><div class="cfg-body"><p class="cfg-note">Ore totali standard per giornata, indipendenti dai colli ricevuti. Il valore 0 lascia il budget da definire.</p><div class="tw"><table><thead><tr><th>Giorno</th><th>Ore standard</th></tr></thead><tbody>${ricevimento}</tbody></table></div></div></details>
     <details class="cfg-section" open><summary>Carico — ore totali giornaliere</summary><div class="cfg-body tw"><table><thead><tr><th>Giorno</th><th>Ore standard</th></tr></thead><tbody>${carico}</tbody></table></div></details>
@@ -382,7 +378,6 @@ function showTab(id){
   if(id==='config')renderConfigTab();
   else if(id==='previsione')renderPrevisioneTab();
   else if(id==='appalto')renderProgrammazioneAppaltoTab();
-  else if(id==='pdf')renderTurniPdfTab();
   else if(id==='controllo')renderControlloTab();
 }
 
