@@ -196,6 +196,9 @@ const ATTIVITA_PRODUTTIVITA={14:'Ricevimento',15:'Ventilazione',16:'Legaggio'};
 const ID_ATTIVITA_RICEVIMENTO=14;
 const ID_ATTIVITA_VENTILAZIONE=15;
 const ID_ATTIVITA_LEGAGGIO=16;
+const ID_REPARTO_ECONOMIA=4;
+const ID_ATTIVITA_FORNO=54;
+const ID_REPARTO_LAVAGGIO=5;
 let ID_ATTIVITA_NAVETTA=null; // trovato per nome nel catalogo Nexus, vedi caricaCatalogoAttivita
 const GIORNI=['Lunedì','Martedì','Mercoledì','Giovedì','Venerdì','Sabato','Domenica'];
 const ETICHETTE_TAB=[...GIORNI,'Lunedì +1'];
@@ -862,8 +865,13 @@ function renderRiepilogoOrtofruttaAppalto(righeGiorno){
 const CONTROLLO_REPARTI_FASCE={ceste:'Lavaggio ceste',forno:'Lavaggio forno',vuoti:'Vuoti',grocery:'Grocery'};
 function chiaveRepartoControllo(r){
   const att=normalizzaNomePlanner(r.attivita),rep=normalizzaNomePlanner(r.reparto);
-  if(/frutta|orto/.test(att))return null;if(/cest/.test(att))return'ceste';if(/forno/.test(att))return'forno';if(/carico|bai/.test(att))return'carico';
-  if(/cest/.test(rep))return'ceste';if(/forno/.test(rep))return'forno';if(/carico|bai/.test(rep))return'carico';if(/grocer|acque/.test(rep))return'grocery';if(/vuot/.test(rep))return'vuoti';return null;
+  const idReparto=Number(r.id_reparto)||0,idAttivita=Number(r.id_attivita)||0;
+  // Il Lavaggio conta sempre nelle ore lavaggio, indipendentemente dall'attività scelta.
+  if(idReparto===ID_REPARTO_LAVAGGIO)return'ceste';
+  // Il lavaggio forno conta solo con il collegamento Nexus Economia + e Forno.
+  if(idReparto===ID_REPARTO_ECONOMIA&&idAttivita===ID_ATTIVITA_FORNO)return'forno';
+  if(/frutta|orto/.test(att))return null;if(/carico|bai/.test(att))return'carico';
+  if(/carico|bai/.test(rep))return'carico';if(/grocer|acque/.test(rep))return'grocery';if(/vuot/.test(rep))return'vuoti';return null;
 }
 function chiaveAttivitaControllo(nome){
   const n=normalizzaNomePlanner(nome);if(/compatt/.test(n))return'compattatori';if(/mulet/.test(n))return'muletto';if(/navett/.test(n))return'navetta';if(/pane/.test(n))return'pane';if(/polim|poly/.test(n))return'polimer';if(/pulizi/.test(n))return'pulizie';if(/ricev/.test(n))return'ricevimento';if(/stocc/.test(n))return'stoccaggio';if(/abbass/.test(n))return'abbassamenti';if(/cest/.test(n))return'lavaggio ceste';if(/forno/.test(n))return'lavaggio forno';return n;
@@ -890,7 +898,9 @@ function htmlCoperturaFasce(esito,aperto){
 }
 function calcolaControlloCarico(righeSettimana){const richieste=Number(CONFIG_APPALTO.carico?.[APPALTO_GIORNO])||0,programmate=righeValideCopertura(righeSettimana).filter(r=>r.giorno===APPALTO_GIORNO&&chiaveRepartoControllo(r)==='carico').reduce((s,r)=>s+durataTurno(r),0);return{richieste,programmate,mancanti:Math.max(0,richieste-programmate),completo:richieste>0&&programmate>=richieste};}
 function renderControlliRepartiAppalto(righeSettimana){
-  const el=document.getElementById('appalto-controlli');if(!el)return;const esiti=Object.keys(CONTROLLO_REPARTI_FASCE).map(k=>calcolaCoperturaFasce(k,righeSettimana)),carico=calcolaControlloCarico(righeSettimana),filtro=chiaveRepartoControllo({reparto:APPALTO_REPARTO,attivita:''});
+  const el=document.getElementById('appalto-controlli');if(!el)return;const esiti=Object.keys(CONTROLLO_REPARTI_FASCE).map(k=>calcolaCoperturaFasce(k,righeSettimana)),carico=calcolaControlloCarico(righeSettimana);
+  const repartoSelezionato=REPARTI.find(r=>nomeReparto(r)===APPALTO_REPARTO),idRepartoSelezionato=Number(repartoSelezionato?.ID_Reparto)||0;
+  const filtro=idRepartoSelezionato===ID_REPARTO_ECONOMIA?'forno':idRepartoSelezionato===ID_REPARTO_LAVAGGIO?'ceste':chiaveRepartoControllo({reparto:APPALTO_REPARTO,attivita:''});
   const riepilogo=[...esiti.map(e=>({titolo:e.titolo,richieste:e.oreRichieste,coperte:e.oreCoperte,mancanti:e.oreMancanti,completo:e.completo})),{titolo:'Carico',richieste:carico.richieste,coperte:carico.programmate,mancanti:carico.mancanti,completo:carico.completo}];
   const righe=riepilogo.map(x=>`<tr><td><b>${x.titolo}</b></td><td>${x.richieste.toFixed(1)} h</td><td>${x.coperte.toFixed(1)} h</td><td>${x.mancanti?`<span class="pill pr">Mancano ${x.mancanti.toFixed(1)} h</span>`:x.richieste?'<span class="pill pg">Completo</span>':'<span class="pill py">Da configurare</span>'}</td></tr>`).join('');
   const dettagli=esiti.filter(e=>APPALTO_REPARTO==='Tutti'||filtro===e.rep).map(e=>htmlCoperturaFasce(e,filtro===e.rep)).join('');
