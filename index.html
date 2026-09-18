@@ -822,10 +822,9 @@ function offsetGiornoRigaAppalto(r){
 }
 function giornoEffettivoRigaAppalto(r){return Number(r?.giorno||0)+offsetGiornoRigaAppalto(r);}
 function turnoAssente(r){
-  if(!r.id_dipendente)return null;const data=addGiorni(APPALTO_LUNEDI,giornoEffettivoRigaAppalto(r));let a=APPALTO_ASSENZE.get(chiaveAssenza(r.id_dipendente,data));
-  const inizio=orarioAMinuti(r.inizio),fine=orarioAMinuti(r.fine);
-  if(!a&&inizio!=null&&fine!=null&&fine<=inizio)a=APPALTO_ASSENZE.get(chiaveAssenza(r.id_dipendente,addGiorni(data,1)));
-  return a||null;
+  if(!r.id_dipendente)return null;
+  const dataIngresso=addGiorni(APPALTO_LUNEDI,Number(r.giorno||0));
+  return APPALTO_ASSENZE.get(chiaveAssenza(r.id_dipendente,dataIngresso))||null;
 }
 function motivoAssenza(a){return a?.TipoAssenza||a?.Tipo||a?.Motivo||a?.Descrizione||a?.Causale||'Assenza / ferie';}
 function intervalloAssoluto(r){
@@ -841,9 +840,9 @@ function descrizioneConflittiAppalto(r){
   return conflittiRigaAppalto(r).map(x=>{const giorno=giornoEffettivoRigaAppalto(x);return `${ETICHETTE_TAB[giorno]||'Giorno '+(giorno+1)} ${x.inizio}–${x.fine}`;}).join(', ');
 }
 function candidatiSostituzione(turno){
-  const settimana=APPALTO_SETTIMANE[APPALTO_LUNEDI];if(!settimana)return[];const data=addGiorni(APPALTO_LUNEDI,turno.giorno),notte=orarioAMinuti(turno.fine)<=orarioAMinuti(turno.inizio),dataFine=addGiorni(data,1);
+  const settimana=APPALTO_SETTIMANE[APPALTO_LUNEDI];if(!settimana)return[];const data=addGiorni(APPALTO_LUNEDI,turno.giorno);
   return DIPENDENTI.filter(d=>String(d.ID_Dipendente)!==String(turno.id_dipendente))
-    .filter(d=>!APPALTO_ASSENZE.has(chiaveAssenza(d.ID_Dipendente,data))&&(!notte||!APPALTO_ASSENZE.has(chiaveAssenza(d.ID_Dipendente,dataFine))))
+    .filter(d=>!APPALTO_ASSENZE.has(chiaveAssenza(d.ID_Dipendente,data)))
     .filter(d=>!settimana.righe.some(r=>String(r.id_dipendente)===String(d.ID_Dipendente)&&intervalliSovrapposti(r,turno)))
     .map(d=>({d,esperienza:settimana.righe.filter(r=>String(r.id_dipendente)===String(d.ID_Dipendente)&&(r.attivita===turno.attivita||r.reparto===turno.reparto)).length}))
     .sort((a,b)=>b.esperienza-a.esperienza||String(a.d.Nome).localeCompare(String(b.d.Nome))).slice(0,8).map(x=>x.d);
@@ -915,13 +914,9 @@ function righeReplicaSelezionate(){
 }
 function gruppiRigheReplica(righe){const gruppi=new Map();righe.forEach(r=>{const k=String(r.id_dipendente);if(!gruppi.has(k))gruppi.set(k,[]);gruppi.get(k).push(r);});return gruppi;}
 function assenzaGruppoReplica(righePersona,giornoDestinazione){
-  for(const r of righePersona){
-    const giornoInizio=giornoDestinazione+offsetGiornoRigaAppalto(r),dataInizio=addGiorni(APPALTO_LUNEDI,giornoInizio);
-    let assenza=APPALTO_ASSENZE.get(chiaveAssenza(r.id_dipendente,dataInizio));
-    if(!assenza&&orarioAMinuti(r.inizio)!=null&&orarioAMinuti(r.fine)!=null&&orarioAMinuti(r.fine)<=orarioAMinuti(r.inizio))assenza=APPALTO_ASSENZE.get(chiaveAssenza(r.id_dipendente,addGiorni(dataInizio,1)));
-    if(assenza)return assenza;
-  }
-  return null;
+  const persona=righePersona[0];if(!persona)return null;
+  const dataIngresso=addGiorni(APPALTO_LUNEDI,giornoDestinazione);
+  return APPALTO_ASSENZE.get(chiaveAssenza(persona.id_dipendente,dataIngresso))||null;
 }
 async function apriReplicaSelezionati(){
   let righe=righeReplicaSelezionate();if(!righe.length){toast('Seleziona almeno un turno da replicare.','warn');return;}
