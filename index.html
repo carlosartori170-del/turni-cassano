@@ -120,6 +120,10 @@ tr:hover td{background:#f5fbf7;}
 .azioni-turno .btn-minus{display:inline-flex!important;visibility:visible!important;opacity:1!important;background:var(--rosso);border:1.5px solid var(--rosso);color:#fff;}
 .ore-azioni{display:flex;align-items:center;justify-content:space-between;gap:8px;min-width:82px;}
 .ore-azioni .valore-ore{white-space:nowrap;}
+.comando-riga{display:flex!important;width:30px;height:26px;align-items:center;justify-content:center;border-radius:6px;font-size:19px;font-weight:900;line-height:1;cursor:pointer;user-select:none;box-sizing:border-box;}
+.comando-riga.piu{background:#fff;border:2px solid #178447;color:#178447;}
+.comando-riga.meno{background:#c62828;border:2px solid #c62828;color:#fff;}
+.comando-riga.disabilitato{opacity:.35;cursor:not-allowed;pointer-events:none;}
 .orario-mezzora{min-width:78px;padding:5px 6px;border:1px solid var(--bordo);border-radius:5px;color:var(--testo);background:#fff;}
 
 /* Griglia turni settimanale */
@@ -960,13 +964,13 @@ function renderCorpoAppalto(){
     if(r.virtuale){
       stato=ass?'<span class="pill pr">Assente / ferie</span>':'<span class="pill py">Da programmare</span>';
       const campi=campiDipendenteDaProgrammare(r),disabilitato=ass?'disabled':'';
-      return `<tr><td>${stato}${ass?'<br><small>'+motivoAssenza(ass)+'</small>':''}</td><td><b>${r.nome}</b></td><td>${ass?'—':campi.orario}</td><td>${ass?'—':campi.reparto}</td><td>${ass?'—':campi.attivita}</td><td><div class="ore-azioni"><span class="valore-ore">0.0 h</span><div class="azioni-turno"><button type="button" class="btn bsm btn-icona btn-plus" style="display:inline-flex!important;background:#fff!important;border:2px solid #178447!important;color:#178447!important;" title="Aggiungi il turno" aria-label="Aggiungi il turno" onclick="aggiungiDipendenteGiorno('${r.id_dipendente}')" ${disabilitato}>+</button></div></div></td></tr>`;
+      return `<tr><td>${stato}${ass?'<br><small>'+motivoAssenza(ass)+'</small>':''}</td><td><b>${r.nome}</b></td><td>${ass?'—':campi.orario}</td><td>${ass?'—':campi.reparto}</td><td>${ass?'—':campi.attivita}</td><td><div class="ore-azioni"><span class="valore-ore">0.0 h</span><div class="azioni-turno"><span class="comando-riga piu ${ass?'disabilitato':''}" role="button" tabindex="0" title="Aggiungi il turno" aria-label="Aggiungi il turno" onclick="aggiungiDipendenteGiorno('${r.id_dipendente}')">+</span></div></div></td></tr>`;
     }
     if(ass)stato=sost?'<span class="pill py">Assenza coperta</span>':'<span class="pill pr">Da sostituire</span>';if(conflitto)stato+=' <span class="pill pr">Sovrapposti</span>';
     if(conflitto)stato+=`<br><small>Con: ${dettaglioConflitto}</small>`;
     let azione='';if(ass&&r.tipo==='standard'&&!sost){const cand=candidatiSostituzione(r);azione=`<select onchange="if(this.value)sostituisciTurno('${r.uid}',this.value)"><option value="">Scegli sostituto…</option>${cand.map(d=>`<option value="${d.ID_Dipendente}">${d.Nome}</option>`).join('')}</select> `;}
-    let bottoni=`<button type="button" class="btn bsm btn-icona btn-plus" title="Aggiungi un'altra mansione" aria-label="Aggiungi un'altra mansione" onclick="aggiungiMansioneAppalto('${r.uid}')">＋</button>`;
-    if(r.tipo==='sostituzione'){if(r.sostituisce)bottoni+=`<button type="button" class="btn bo bsm" onclick="rendiSostituzioneStandard('${r.uid}')">Rendi standard</button>`;bottoni+=`<button type="button" class="btn bsm btn-icona btn-minus" title="Elimina fascia" aria-label="Elimina fascia" onclick="rimuoviSostituzione('${r.uid}')">−</button>`;}else bottoni+=`<button type="button" class="btn bsm btn-icona btn-minus" title="Elimina fascia" aria-label="Elimina fascia" onclick="eliminaFasciaAppalto('${r.uid}')">−</button>`;
+    let bottoni=`<span class="comando-riga piu" role="button" tabindex="0" title="Aggiungi un'altra mansione" aria-label="Aggiungi un'altra mansione" onclick="aggiungiMansioneAppalto('${r.uid}')">+</span>`;
+    if(r.tipo==='sostituzione'){if(r.sostituisce)bottoni+=`<span class="btn bo bsm" role="button" tabindex="0" onclick="rendiSostituzioneStandard('${r.uid}')">Rendi standard</span>`;bottoni+=`<span class="comando-riga meno" role="button" tabindex="0" title="Elimina fascia" aria-label="Elimina fascia" onclick="rimuoviSostituzione('${r.uid}')">−</span>`;}else bottoni+=`<span class="comando-riga meno" role="button" tabindex="0" title="Elimina fascia" aria-label="Elimina fascia" onclick="eliminaFasciaAppalto('${r.uid}')">−</span>`;
     azione+=`<div class="azioni-turno">${bottoni}</div>`;
     return `<tr><td>${stato}${ass?'<br><small>'+motivoAssenza(ass)+'</small>':''}</td><td>${opzioniDipendenteAppalto(r)}</td><td>${selettoreOrarioAppalto(r,'inizio')}–${selettoreOrarioAppalto(r,'fine')}</td><td>${opzioniRepartoAppalto(r)}</td><td>${opzioniAttivitaAppalto(r)}</td><td><div class="ore-azioni"><span class="valore-ore">${durataTurno(r).toFixed(1)} h</span>${azione}</div></td></tr>`;
   }).join('');
