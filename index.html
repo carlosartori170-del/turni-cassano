@@ -821,6 +821,10 @@ function candidatiSostituzione(turno){
 }
 function sostituzioneEsistente(uid){return APPALTO_SETTIMANE[APPALTO_LUNEDI]?.righe.find(r=>r.sostituisce===uid);}
 function trovaRigaAppalto(uid){return APPALTO_SETTIMANE[APPALTO_LUNEDI]?.righe.find(r=>r.uid===uid);}
+function nomeVisualizzatoRigaAppalto(r){
+  const d=r?.id_dipendente?DIPENDENTI.find(x=>String(x.ID_Dipendente)===String(r.id_dipendente)):null;
+  return d?.Nome||r?.nome||r?.origine_nome||'';
+}
 function opzioniDipendenteAppalto(r){
   const corrente=r.id_dipendente?String(r.id_dipendente):'';let extra='';
   if(!corrente&&r.nome)extra=`<option value="" selected>${r.nome} — da collegare</option>`;
@@ -866,7 +870,7 @@ function aggiungiMansioneAppalto(uid){
 function ordinaNominativiAppalto(){
   const s=APPALTO_SETTIMANE[APPALTO_LUNEDI];if(!s)return;
   const posizione=new Map(s.righe.map((r,i)=>[r.uid,i]));
-  s.righe.sort((a,b)=>Number(a.giorno)-Number(b.giorno)||String(a.nome||'').localeCompare(String(b.nome||''),'it',{sensitivity:'base'})||(posizione.get(a.uid)??0)-(posizione.get(b.uid)??0));
+  s.righe.sort((a,b)=>Number(a.giorno)-Number(b.giorno)||nomeVisualizzatoRigaAppalto(a).localeCompare(nomeVisualizzatoRigaAppalto(b),'it',{sensitivity:'base'})||(posizione.get(a.uid)??0)-(posizione.get(b.uid)??0));
   salvaSettimaneAppalto();renderCorpoAppalto();toast('Nominativi riordinati dalla A alla Z.');
 }
 function eliminaFasciaAppalto(uid){if(!confirm('Eliminare questa fascia dalla bozza locale?'))return;const s=APPALTO_SETTIMANE[APPALTO_LUNEDI];s.righe=s.righe.filter(r=>r.uid!==uid&&r.sostituisce!==uid);salvaSettimaneAppalto();renderCorpoAppalto();}
@@ -956,7 +960,7 @@ function renderControlliRepartiAppalto(righeSettimana){
   el.innerHTML=`<details class="cfg-section" open><summary>Riepilogo copertura altri reparti</summary><div class="cfg-body"><div class="tw"><table><thead><tr><th>Reparto</th><th>Richieste</th><th>Coperte</th><th>Stato</th></tr></thead><tbody>${righe}</tbody></table></div></div></details>${dettagli}${caricoHtml}`;
 }
 function renderVistaPersoneAppalto(righe){
-  const gruppi=new Map();righe.forEach(r=>{const k=r.id_dipendente?'id-'+r.id_dipendente:'nome-'+r.nome;if(!gruppi.has(k))gruppi.set(k,{nome:r.nome||'Da assegnare',righe:[]});gruppi.get(k).righe.push(r);});
+  const gruppi=new Map();righe.forEach(r=>{const nome=nomeVisualizzatoRigaAppalto(r),k=r.id_dipendente?'id-'+r.id_dipendente:'nome-'+nome;if(!gruppi.has(k))gruppi.set(k,{nome:nome||'Da assegnare',righe:[]});gruppi.get(k).righe.push(r);});
   const html=[...gruppi.values()].sort((a,b)=>a.nome.localeCompare(b.nome)).map(g=>{g.righe.sort((a,b)=>a.inizio.localeCompare(b.inizio));const conflitto=g.righe.some(conflittiRigaAppalto);return `<tr><td><b>${g.nome}</b></td><td>${g.righe.map(r=>`${r.inizio}–${r.fine} · ${r.reparto||'—'} / ${r.attivita||'—'}`).join('<br>')}</td><td>${g.righe.reduce((s,r)=>s+durataTurno(r),0).toFixed(1)} h</td><td>${conflitto?'<span class="pill pr">Sovrapposizione</span>':'<span class="pill pg">Orari coerenti</span>'}</td></tr>`;}).join('');
   return `<div class="tw"><table><thead><tr><th>Persona</th><th>Sequenza della giornata</th><th>Ore</th><th>Controllo</th></tr></thead><tbody>${html||'<tr><td colspan="4" class="empty">Nessun turno nel filtro selezionato.</td></tr>'}</tbody></table></div>`;
 }
@@ -973,7 +977,7 @@ function renderCorpoAppalto(){
   const nonCollegati=righe.filter(r=>!r.virtuale&&(!r.id_dipendente||!r.id_reparto||!r.id_attivita)).length,conflitti=righe.filter(r=>!r.virtuale&&conflittiRigaAppalto(r).length).length;
   if(APPALTO_VISTA_PERSONE){body.innerHTML=`<div class="stats"><div class="stat"><div class="n">${righe.length}</div><div class="l">Fasce mostrate</div></div><div class="stat ${assenti.length?'err':''}"><div class="n">${assenti.length}</div><div class="l">Da sostituire</div></div><div class="stat ${conflitti?'err':''}"><div class="n">${conflitti}</div><div class="l">Fasce sovrapposte</div></div></div>${renderVistaPersoneAppalto(righe)}`;return;}
   const ordineRighe=new Map(settimana.righe.map((r,i)=>[r.uid,i]));
-  const html=righe.sort((a,b)=>String(a.nome||'').localeCompare(String(b.nome||''),'it',{sensitivity:'base'})||String(a.id_dipendente||'').localeCompare(String(b.id_dipendente||''))||(ordineRighe.get(a.uid)??Number.MAX_SAFE_INTEGER)-(ordineRighe.get(b.uid)??Number.MAX_SAFE_INTEGER)||String(a.inizio||'').localeCompare(String(b.inizio||''))).map(r=>{
+  const html=righe.sort((a,b)=>nomeVisualizzatoRigaAppalto(a).localeCompare(nomeVisualizzatoRigaAppalto(b),'it',{sensitivity:'base'})||String(a.id_dipendente||'').localeCompare(String(b.id_dipendente||''))||(ordineRighe.get(a.uid)??Number.MAX_SAFE_INTEGER)-(ordineRighe.get(b.uid)??Number.MAX_SAFE_INTEGER)||String(a.inizio||'').localeCompare(String(b.inizio||''))).map(r=>{
     const ass=turnoAssente(r),sost=sostituzioneEsistente(r.uid),dettaglioConflitto=descrizioneConflittiAppalto(r),conflitto=!!dettaglioConflitto;let stato=r.tipo==='sostituzione'?'<span class="pill pb">Sostituzione</span>':'<span class="pill pg">Standard</span>';
     if(r.virtuale){
       stato=ass?'<span class="pill pr">Assente / ferie</span>':'<span class="pill py">Da programmare</span>';
