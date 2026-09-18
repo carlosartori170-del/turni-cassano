@@ -133,7 +133,7 @@ tr:hover td{background:#f5fbf7;}
 .comando-input.piu{background:#fff!important;border:1.5px solid #178447!important;color:#178447!important;}
 .comando-input.meno{background:#c62828!important;border:1.5px solid #c62828!important;color:#fff!important;}
 .comando-input.replica{background:#fff!important;border:1.5px solid var(--blu)!important;color:var(--blu)!important;font-size:13px!important;}
-.btn-riposo{display:block;width:54px;height:22px;margin:2px auto;padding:0;border:1.5px solid var(--blu);border-radius:5px;background:#eef4ff;color:var(--blu);font-size:.67rem;font-weight:800;cursor:pointer;}
+.btn-riposo{display:block!important;width:25px!important;height:22px!important;margin:2px auto!important;padding:0!important;border:1.5px solid var(--blu)!important;border-radius:5px!important;background:#fff!important;color:var(--blu)!important;font-size:13px!important;font-weight:900!important;line-height:18px!important;cursor:pointer!important;}
 .selezione-turno{display:flex;align-items:center;justify-content:center;gap:5px;color:var(--blu);font-size:.7rem;font-weight:800;cursor:pointer;white-space:nowrap;}
 .selezione-turno input{width:17px;height:17px;accent-color:var(--blu);cursor:pointer;}
 .replica-overlay{position:fixed;inset:0;z-index:1000;display:none;align-items:center;justify-content:center;padding:20px;background:rgba(4,30,16,.56);}
@@ -1091,7 +1091,7 @@ function renderCorpoAppalto(){
     if(r.virtuale){
       stato=ass?'<span class="pill pr">Assente / ferie</span>':'<span class="pill py">Da programmare</span>';
       const campi=campiDipendenteDaProgrammare(r),disabilitato=ass?'disabled':'';
-      const azioneVirtuale=APPALTO_MODALITA_REPLICA||ass?'':`<input type="button" class="comando-input piu" value="+" title="Aggiungi il turno" aria-label="Aggiungi il turno" onclick="aggiungiDipendenteGiorno('${r.id_dipendente}')"><input type="button" class="btn-riposo" value="Riposo" title="Imposta giorno di riposo" aria-label="Imposta giorno di riposo" onclick="impostaRiposoAppalto('${r.id_dipendente}')">`;
+      const azioneVirtuale=APPALTO_MODALITA_REPLICA||ass?'':`<input type="button" class="comando-input piu" value="+" title="Aggiungi il turno" aria-label="Aggiungi il turno" onclick="aggiungiDipendenteGiorno('${r.id_dipendente}')"><input type="button" class="btn-riposo" value="R" title="Imposta giorno di riposo" aria-label="Imposta giorno di riposo" onclick="impostaRiposoAppalto('${r.id_dipendente}')">`;
       return `<tr><td>${stato}${ass?'<br><small>'+motivoAssenza(ass)+'</small>':''}</td><td><b>${r.nome}</b></td><td>${ass?'—':campi.orario}</td><td>${ass?'—':campi.reparto}</td><td>${ass?'—':campi.attivita}</td><td>0.0 h</td><td><div class="azioni-turno">${azioneVirtuale}</div></td></tr>`;
     }
     if(r.tipo==='riposo'){
@@ -1108,7 +1108,7 @@ function renderCorpoAppalto(){
     }else{
       if(ass&&r.tipo==='standard'&&!sost){const cand=candidatiSostituzione(r);azione=`<select onchange="if(this.value)sostituisciTurno('${r.uid}',this.value)"><option value="">Scegli sostituto…</option>${cand.map(d=>`<option value="${d.ID_Dipendente}">${d.Nome}</option>`).join('')}</select> `;}
       let bottoni=`<input type="button" class="comando-input piu" value="+" title="Aggiungi un'altra mansione" aria-label="Aggiungi un'altra mansione" onclick="aggiungiMansioneAppalto('${r.uid}')">`;
-      if(r.tipo==='standard'&&!ass)bottoni+=`<input type="button" class="btn-riposo" value="Riposo" title="Sostituisci i turni di questa giornata con un giorno di riposo" aria-label="Imposta giorno di riposo" onclick="impostaRiposoAppalto('${r.id_dipendente}')">`;
+      if(r.tipo==='standard'&&!ass)bottoni+=`<input type="button" class="btn-riposo" value="R" title="Sostituisci i turni di questa giornata con un giorno di riposo" aria-label="Imposta giorno di riposo" onclick="impostaRiposoAppalto('${r.id_dipendente}')">`;
       if(r.tipo==='sostituzione'){if(r.sostituisce)bottoni+=`<span class="btn bo bsm" role="button" tabindex="0" onclick="rendiSostituzioneStandard('${r.uid}')">Rendi standard</span>`;if(!ass)bottoni+=`<input type="button" class="comando-input meno" value="−" title="Elimina fascia" aria-label="Elimina fascia" onclick="rimuoviSostituzione('${r.uid}')">`;}else if(!ass)bottoni+=`<input type="button" class="comando-input meno" value="−" title="Elimina fascia" aria-label="Elimina fascia" onclick="eliminaFasciaAppalto('${r.uid}')">`;
       azione+=`<div class="azioni-turno">${bottoni}</div>`;
     }
