@@ -133,6 +133,8 @@ tr:hover td{background:#f5fbf7;}
 .comando-input.piu{background:#fff!important;border:1.5px solid #178447!important;color:#178447!important;}
 .comando-input.meno{background:#c62828!important;border:1.5px solid #c62828!important;color:#fff!important;}
 .comando-input.replica{background:#fff!important;border:1.5px solid var(--blu)!important;color:var(--blu)!important;font-size:13px!important;}
+.selezione-turno{display:flex;align-items:center;justify-content:center;gap:5px;color:var(--blu);font-size:.7rem;font-weight:800;cursor:pointer;white-space:nowrap;}
+.selezione-turno input{width:17px;height:17px;accent-color:var(--blu);cursor:pointer;}
 .replica-overlay{position:fixed;inset:0;z-index:1000;display:none;align-items:center;justify-content:center;padding:20px;background:rgba(4,30,16,.56);}
 .replica-card{width:min(460px,100%);background:#fff;border:1px solid var(--bordo);border-radius:12px;padding:20px;box-shadow:0 18px 55px rgba(0,0,0,.28);}
 .replica-card h3{margin-bottom:7px;color:var(--p);}.replica-card p{color:var(--grigio);line-height:1.4;margin-bottom:14px;}
@@ -669,6 +671,8 @@ let APPALTO_ASSENZE=new Map();
 let APPALTO_ASSENZE_VERIFICATE=false;
 let APPALTO_MSG='';
 let APPALTO_VISTA_PERSONE=false;
+let APPALTO_MODALITA_REPLICA=false;
+let APPALTO_RIGHE_REPLICA=new Set();
 let APPALTO_OF_DATA={previsioni:{},obiettivi:{},percLegaggio:0,percNavetta:0,caricato:false};
 
 function caricaSettimaneAppalto(){try{return JSON.parse(localStorage.getItem(APPALTO_STORAGE_KEY)||'{}');}catch(_){return{};}}
@@ -764,12 +768,12 @@ function renderProgrammazioneAppaltoTab(){
   document.getElementById('mc').innerHTML=`<div class="card"><div class="ct">Programmazione dell'intero appalto</div>
     <div class="alert aok">Programmatore unico collegato a Supabase: ogni fascia appartiene alla persona, anche quando nella stessa giornata cambia reparto o attività. Le modifiche restano in bozza sul dispositivo fino a “Salva settimana”.</div>
     <div class="g2 no-print" style="max-width:520px;"><div class="fg"><label>Lunedì della settimana</label><input type="date" id="appalto-lun" value="${APPALTO_LUNEDI}" onchange="caricaSettimanaAppalto(this.value)"></div><div class="fg"><label>Reparto</label><select id="appalto-rep" onchange="APPALTO_REPARTO=this.value;renderCorpoAppalto()"></select></div></div>
-    <div class="brow no-print"><button class="btn bv bsm" onclick="salvaSettimanaSupabase()">💾 Salva settimana</button><button class="btn bp bsm" onclick="creaDaSettimanaPrecedente()">↪ Crea dalla settimana precedente</button><button class="btn bo bsm" onclick="aggiungiFasciaAppalto()">＋ Aggiungi fascia</button><button class="btn bo bsm" onclick="ordinaNominativiAppalto()">A–Z Riordina nominativi</button><button class="btn bo bsm" onclick="controllaAssenzeAppalto()">🔎 Controlla assenze Nexus</button><button class="btn bo bsm" onclick="APPALTO_SOLO_ASSENTI=!APPALTO_SOLO_ASSENTI;renderCorpoAppalto()">Solo da sostituire</button><button class="btn bo bsm" onclick="APPALTO_VISTA_PERSONE=!APPALTO_VISTA_PERSONE;renderCorpoAppalto()">Vista persone/reparto</button><button class="btn bo bsm" onclick="window.print()">🖨 Stampa</button></div>
+    <div class="brow no-print"><button class="btn bv bsm" onclick="salvaSettimanaSupabase()">💾 Salva settimana</button><button class="btn bp bsm" onclick="creaDaSettimanaPrecedente()">↪ Crea dalla settimana precedente</button><button class="btn bo bsm" onclick="aggiungiFasciaAppalto()">＋ Aggiungi fascia</button><button id="appalto-seleziona-replica" class="btn bo bsm" onclick="toggleSelezioneReplica()">☑ Seleziona turni</button><button id="appalto-conferma-replica" class="btn bv bsm" style="display:none" onclick="apriReplicaSelezionati()">↻ Replica selezionati (0)</button><button class="btn bo bsm" onclick="ordinaNominativiAppalto()">A–Z Riordina nominativi</button><button class="btn bo bsm" onclick="controllaAssenzeAppalto()">🔎 Controlla assenze Nexus</button><button class="btn bo bsm" onclick="APPALTO_SOLO_ASSENTI=!APPALTO_SOLO_ASSENTI;renderCorpoAppalto()">Solo da sostituire</button><button class="btn bo bsm" onclick="APPALTO_VISTA_PERSONE=!APPALTO_VISTA_PERSONE;renderCorpoAppalto()">Vista persone/reparto</button><button class="btn bo bsm" onclick="window.print()">🖨 Stampa</button></div>
     <div id="appalto-msg"></div><div id="appalto-tabs"></div><div id="appalto-of"></div><div id="appalto-controlli"></div><div id="appalto-personale"></div><div id="appalto-body"></div></div>`;
   caricaSettimanaAppalto(APPALTO_LUNEDI);
 }
 function caricaSettimanaAppalto(lunedi){
-  APPALTO_LUNEDI=lunediSettimana(lunedi);APPALTO_GIORNO=0;APPALTO_ASSENZE=new Map();APPALTO_ASSENZE_VERIFICATE=false;APPALTO_MSG='';
+  APPALTO_LUNEDI=lunediSettimana(lunedi);APPALTO_GIORNO=0;APPALTO_ASSENZE=new Map();APPALTO_ASSENZE_VERIFICATE=false;APPALTO_MSG='';APPALTO_MODALITA_REPLICA=false;APPALTO_RIGHE_REPLICA.clear();
   APPALTO_OF_DATA={previsioni:{},obiettivi:{},percLegaggio:0,percNavetta:0,caricato:false};
   const dataInput=document.getElementById('appalto-lun');if(dataInput)dataInput.value=APPALTO_LUNEDI;
   const settimana=APPALTO_SETTIMANE[APPALTO_LUNEDI];
@@ -796,8 +800,9 @@ async function caricaDatiOrtofruttaAppalto(){
 }
 function renderTabsAppalto(){
   const el=document.getElementById('appalto-tabs');if(!el)return;
-  el.innerHTML=`<div class="daytabs no-print">${GIORNI.map((g,i)=>`<button class="daytab ${i===APPALTO_GIORNO?'on':''}" onclick="APPALTO_GIORNO=${i};renderTabsAppalto()">${g}<br><small>${fmtDataIt(addGiorni(APPALTO_LUNEDI,i))}</small></button>`).join('')}</div>`;renderCorpoAppalto();
+  el.innerHTML=`<div class="daytabs no-print">${GIORNI.map((g,i)=>`<button class="daytab ${i===APPALTO_GIORNO?'on':''}" onclick="cambiaGiornoAppalto(${i})">${g}<br><small>${fmtDataIt(addGiorni(APPALTO_LUNEDI,i))}</small></button>`).join('')}</div>`;renderCorpoAppalto();
 }
+function cambiaGiornoAppalto(giorno){APPALTO_GIORNO=giorno;APPALTO_MODALITA_REPLICA=false;APPALTO_RIGHE_REPLICA.clear();renderTabsAppalto();}
 function chiaveAssenza(id,data){return String(id)+'|'+data;}
 function offsetGiornoRigaAppalto(r){
   const s=APPALTO_SETTIMANE[APPALTO_LUNEDI];if(!s||!r)return 0;
@@ -890,40 +895,58 @@ function aggiungiMansioneAppalto(uid){
   const nuova={uid:(base.tipo==='sostituzione'?'sost-':'std-')+Date.now()+'-'+Math.random().toString(36).slice(2,6),giorno:base.giorno,nome:base.nome,id_dipendente:base.id_dipendente,reparto:base.reparto,id_reparto:base.id_reparto||null,attivita:'',id_attivita:null,origine_nome:base.origine_nome||base.nome,origine_reparto:base.origine_reparto||base.reparto,origine_attivita:'',inizio:base.fine||base.inizio||'06:00',fine:'',tipo:base.tipo==='sostituzione'?'sostituzione':'standard',sostituisce:null};
   const posizione=s.righe.findIndex(r=>r.uid===uid);s.righe.splice(posizione+1,0,nuova);salvaSettimaneAppalto();APPALTO_SOLO_ASSENTI=false;renderCorpoAppalto();toast('Nuova mansione aggiunta per '+(base.nome||'la persona selezionata')+'.');
 }
-let APPALTO_REPLICA_UID=null;
-function apriReplicaSettimana(uid){
-  const r=trovaRigaAppalto(uid);if(!r||r.tipo!=='standard'||turnoAssente(r))return;
-  if(!r.id_dipendente||!r.inizio||!r.fine){toast('Completa prima persona e orario del turno.','warn');return;}
-  APPALTO_REPLICA_UID=uid;let overlay=document.getElementById('replica-settimana-overlay');
+function aggiornaComandiReplica(){
+  const seleziona=document.getElementById('appalto-seleziona-replica'),conferma=document.getElementById('appalto-conferma-replica');
+  if(seleziona)seleziona.textContent=APPALTO_MODALITA_REPLICA?'✕ Annulla selezione':'☑ Seleziona turni';
+  if(conferma){conferma.style.display=APPALTO_MODALITA_REPLICA?'inline-flex':'none';conferma.textContent=`↻ Replica selezionati (${APPALTO_RIGHE_REPLICA.size})`;}
+}
+function toggleSelezioneReplica(){
+  APPALTO_MODALITA_REPLICA=!APPALTO_MODALITA_REPLICA;APPALTO_RIGHE_REPLICA.clear();
+  if(APPALTO_MODALITA_REPLICA){APPALTO_SOLO_ASSENTI=false;APPALTO_VISTA_PERSONE=false;toast('Seleziona tutte le righe che vuoi replicare insieme.');}
+  renderCorpoAppalto();
+}
+function toggleRigaReplica(uid,selezionata){
+  if(selezionata)APPALTO_RIGHE_REPLICA.add(uid);else APPALTO_RIGHE_REPLICA.delete(uid);aggiornaComandiReplica();
+}
+function righeReplicaSelezionate(){
+  const s=APPALTO_SETTIMANE[APPALTO_LUNEDI];if(!s)return[];
+  return s.righe.filter(r=>APPALTO_RIGHE_REPLICA.has(r.uid)&&Number(r.giorno)===APPALTO_GIORNO&&r.tipo==='standard'&&!turnoAssente(r)&&r.id_dipendente&&r.inizio&&r.fine);
+}
+function apriReplicaSelezionati(){
+  const righe=righeReplicaSelezionate();if(!righe.length){toast('Seleziona almeno un turno da replicare.','warn');return;}
+  let overlay=document.getElementById('replica-settimana-overlay');
   if(!overlay){
-    document.body.insertAdjacentHTML('beforeend',`<div id="replica-settimana-overlay" class="replica-overlay" role="dialog" aria-modal="true" aria-labelledby="replica-settimana-titolo"><div class="replica-card"><h3 id="replica-settimana-titolo">Replica turno nella settimana</h3><p id="replica-settimana-descrizione"></p><div class="alert awarn">Nei giorni scelti, tutte le righe già presenti di questa persona saranno sostituite da questo turno.</div><div id="replica-settimana-giorni" class="replica-giorni"></div><div class="brow" style="justify-content:flex-end"><button class="btn bo" type="button" onclick="chiudiReplicaSettimana()">Annulla</button><button class="btn bv" type="button" onclick="confermaReplicaSettimana()">Sostituisci nei giorni scelti</button></div></div></div>`);
+    document.body.insertAdjacentHTML('beforeend',`<div id="replica-settimana-overlay" class="replica-overlay" role="dialog" aria-modal="true" aria-labelledby="replica-settimana-titolo"><div class="replica-card"><h3 id="replica-settimana-titolo">Replica i turni selezionati</h3><p id="replica-settimana-descrizione"></p><div class="alert awarn">Per ogni persona selezionata, nei giorni scelti le righe esistenti saranno sostituite contemporaneamente dall’intero gruppo di turni selezionato.</div><div id="replica-settimana-giorni" class="replica-giorni"></div><div class="brow" style="justify-content:flex-end"><button class="btn bo" type="button" onclick="chiudiReplicaSettimana()">Annulla</button><button class="btn bv" type="button" onclick="confermaReplicaSettimana()">Replica il gruppo</button></div></div></div>`);
     overlay=document.getElementById('replica-settimana-overlay');overlay.addEventListener('click',e=>{if(e.target===overlay)chiudiReplicaSettimana();});
   }
-  document.getElementById('replica-settimana-descrizione').textContent=`${nomeVisualizzatoRigaAppalto(r)} · ${r.inizio}–${r.fine} · ${r.reparto||'Reparto da collegare'} / ${r.attivita||'Attività da collegare'}`;
-  document.getElementById('replica-settimana-giorni').innerHTML=GIORNI.map((g,i)=>{const corrente=i===Number(r.giorno);return `<label class="replica-giorno ${corrente?'presente':''}"><input type="checkbox" value="${i}" ${corrente?'checked disabled':''}> <span>${g}${corrente?' · già presente':''}</span></label>`;}).join('');
+  const persone=new Set(righe.map(r=>String(r.id_dipendente))).size;
+  document.getElementById('replica-settimana-descrizione').textContent=`${righe.length} turni selezionati · ${persone} ${persone===1?'persona':'persone'} · origine ${GIORNI[APPALTO_GIORNO]}`;
+  document.getElementById('replica-settimana-giorni').innerHTML=GIORNI.map((g,i)=>{const corrente=i===APPALTO_GIORNO;return `<label class="replica-giorno ${corrente?'presente':''}"><input type="checkbox" value="${i}" ${corrente?'checked disabled':''}> <span>${g}${corrente?' · origine':''}</span></label>`;}).join('');
   overlay.style.display='flex';
 }
-function chiudiReplicaSettimana(){const overlay=document.getElementById('replica-settimana-overlay');if(overlay)overlay.style.display='none';APPALTO_REPLICA_UID=null;}
+function chiudiReplicaSettimana(){const overlay=document.getElementById('replica-settimana-overlay');if(overlay)overlay.style.display='none';}
 function stessaPersonaAppalto(a,b){
   const persona=x=>x.id_dipendente?'id-'+x.id_dipendente:'nome-'+normalizzaNomePlanner(x.nome);
   return persona(a)===persona(b);
 }
 function confermaReplicaSettimana(){
-  const s=APPALTO_SETTIMANE[APPALTO_LUNEDI],base=s?.righe.find(r=>r.uid===APPALTO_REPLICA_UID);if(!s||!base){chiudiReplicaSettimana();return;}
+  const s=APPALTO_SETTIMANE[APPALTO_LUNEDI],selezionate=righeReplicaSelezionate();if(!s||!selezionate.length){chiudiReplicaSettimana();return;}
   const giorni=[...document.querySelectorAll('#replica-settimana-giorni input:checked:not(:disabled)')].map(x=>Number(x.value));
-  if(!giorni.length){toast('Seleziona almeno un giorno in cui replicare il turno.','warn');return;}
-  let aggiunti=0,righeSostituite=0,assenze=0;
+  if(!giorni.length){toast('Seleziona almeno un giorno in cui replicare i turni.','warn');return;}
+  const gruppi=new Map();selezionate.forEach(r=>{const k=String(r.id_dipendente);if(!gruppi.has(k))gruppi.set(k,[]);gruppi.get(k).push(r);});
+  let aggiunti=0,righeSostituite=0,assenze=0,personeAggiornate=0;
   giorni.forEach(giorno=>{
     const data=addGiorni(APPALTO_LUNEDI,giorno);
-    if(base.id_dipendente&&APPALTO_ASSENZE.has(chiaveAssenza(base.id_dipendente,data))){assenze++;return;}
-    const daSostituire=s.righe.filter(r=>Number(r.giorno)===giorno&&stessaPersonaAppalto(r,base)),uidDaSostituire=new Set(daSostituire.map(r=>r.uid));
-    righeSostituite+=daSostituire.length;
-    s.righe=s.righe.filter(r=>!uidDaSostituire.has(r.uid)&&!uidDaSostituire.has(r.sostituisce));
-    const copia={...structuredClone(base),uid:'std-'+Date.now()+'-'+giorno+'-'+Math.random().toString(36).slice(2,6),giorno,tipo:'standard',sostituisce:undefined};
-    s.righe.push(copia);aggiunti++;
+    gruppi.forEach(righePersona=>{
+      const base=righePersona[0];if(APPALTO_ASSENZE.has(chiaveAssenza(base.id_dipendente,data))){assenze++;return;}
+      const daSostituire=s.righe.filter(r=>Number(r.giorno)===giorno&&stessaPersonaAppalto(r,base)),uidDaSostituire=new Set(daSostituire.map(r=>r.uid));
+      righeSostituite+=daSostituire.length;s.righe=s.righe.filter(r=>!uidDaSostituire.has(r.uid)&&!uidDaSostituire.has(r.sostituisce));
+      righePersona.forEach((r,i)=>{s.righe.push({...structuredClone(r),uid:'std-'+Date.now()+'-'+giorno+'-'+i+'-'+Math.random().toString(36).slice(2,6),giorno,tipo:'standard',sostituisce:undefined});aggiunti++;});
+      personeAggiornate++;
+    });
   });
-  salvaSettimaneAppalto();chiudiReplicaSettimana();renderCorpoAppalto();
-  const note=[aggiunti+' giorni aggiornati'];if(righeSostituite)note.push(righeSostituite+' righe precedenti sostituite');if(assenze)note.push(assenze+' giorni saltati per assenza/ferie');toast(note.join(' · '),assenze?'warn':undefined);
+  salvaSettimaneAppalto();chiudiReplicaSettimana();APPALTO_MODALITA_REPLICA=false;APPALTO_RIGHE_REPLICA.clear();renderCorpoAppalto();
+  const note=[aggiunti+' turni replicati',personeAggiornate+' giornate-persona aggiornate'];if(righeSostituite)note.push(righeSostituite+' righe precedenti sostituite');if(assenze)note.push(assenze+' giornate-persona saltate per assenza/ferie');toast(note.join(' · '),assenze?'warn':undefined);
 }
 function ordinaNominativiAppalto(){
   const s=APPALTO_SETTIMANE[APPALTO_LUNEDI];if(!s)return;
@@ -1024,6 +1047,7 @@ function renderVistaPersoneAppalto(righe){
 }
 function renderCorpoAppalto(){
   const body=document.getElementById('appalto-body');if(!body)return;const settimana=APPALTO_SETTIMANE[APPALTO_LUNEDI];
+  aggiornaComandiReplica();
   const msg=document.getElementById('appalto-msg');if(msg)msg.innerHTML=APPALTO_MSG?`<div class="alert ${APPALTO_MSG.startsWith('Errore')?'aerr':'aok'}">${APPALTO_MSG}</div>`:'';
   if(!settimana){const of=document.getElementById('appalto-of'),controlli=document.getElementById('appalto-controlli'),personale=document.getElementById('appalto-personale');if(of)of.innerHTML='';if(controlli)controlli.innerHTML='';if(personale)personale.innerHTML='';body.innerHTML='<div class="empty">Nessuna programmazione per questa settimana. Usa “Crea dalla settimana precedente”.</div>';return;}
   const tutteGiorno=settimana.righe.filter(r=>r.giorno===APPALTO_GIORNO);renderRiepilogoOrtofruttaAppalto(tutteGiorno);renderControlliRepartiAppalto(settimana.righe);
@@ -1040,16 +1064,21 @@ function renderCorpoAppalto(){
     if(r.virtuale){
       stato=ass?'<span class="pill pr">Assente / ferie</span>':'<span class="pill py">Da programmare</span>';
       const campi=campiDipendenteDaProgrammare(r),disabilitato=ass?'disabled':'';
-      return `<tr><td>${stato}${ass?'<br><small>'+motivoAssenza(ass)+'</small>':''}</td><td><b>${r.nome}</b></td><td>${ass?'—':campi.orario}</td><td>${ass?'—':campi.reparto}</td><td>${ass?'—':campi.attivita}</td><td>0.0 h</td><td><div class="azioni-turno"><input type="button" class="comando-input piu" value="+" title="Aggiungi il turno" aria-label="Aggiungi il turno" onclick="aggiungiDipendenteGiorno('${r.id_dipendente}')" ${ass?'disabled':''}></div></td></tr>`;
+      const azioneVirtuale=APPALTO_MODALITA_REPLICA?'':`<input type="button" class="comando-input piu" value="+" title="Aggiungi il turno" aria-label="Aggiungi il turno" onclick="aggiungiDipendenteGiorno('${r.id_dipendente}')" ${ass?'disabled':''}>`;
+      return `<tr><td>${stato}${ass?'<br><small>'+motivoAssenza(ass)+'</small>':''}</td><td><b>${r.nome}</b></td><td>${ass?'—':campi.orario}</td><td>${ass?'—':campi.reparto}</td><td>${ass?'—':campi.attivita}</td><td>0.0 h</td><td><div class="azioni-turno">${azioneVirtuale}</div></td></tr>`;
     }
     if(ass)stato=sost?'<span class="pill py">Assenza coperta</span>':'<span class="pill pr">Da sostituire</span>';if(conflitto)stato+=' <span class="pill pr">Sovrapposti</span>';
     if(conflitto)stato+=`<br><small>Con: ${dettaglioConflitto}</small>`;
-    let azione='';if(ass&&r.tipo==='standard'&&!sost){const cand=candidatiSostituzione(r);azione=`<select onchange="if(this.value)sostituisciTurno('${r.uid}',this.value)"><option value="">Scegli sostituto…</option>${cand.map(d=>`<option value="${d.ID_Dipendente}">${d.Nome}</option>`).join('')}</select> `;}
-    const replicaDisabilitata=!r.id_dipendente||!r.inizio||!r.fine;
-    let bottoni=`<input type="button" class="comando-input piu" value="+" title="Aggiungi un'altra mansione" aria-label="Aggiungi un'altra mansione" onclick="aggiungiMansioneAppalto('${r.uid}')">`;
-    if(r.tipo==='standard'&&!ass)bottoni+=`<input type="button" class="comando-input replica" value="↻" title="Replica questo turno nei giorni scelti" aria-label="Replica questo turno nei giorni scelti" onclick="apriReplicaSettimana('${r.uid}')" ${replicaDisabilitata?'disabled':''}>`;
-    if(r.tipo==='sostituzione'){if(r.sostituisce)bottoni+=`<span class="btn bo bsm" role="button" tabindex="0" onclick="rendiSostituzioneStandard('${r.uid}')">Rendi standard</span>`;if(!ass)bottoni+=`<input type="button" class="comando-input meno" value="−" title="Elimina fascia" aria-label="Elimina fascia" onclick="rimuoviSostituzione('${r.uid}')">`;}else if(!ass)bottoni+=`<input type="button" class="comando-input meno" value="−" title="Elimina fascia" aria-label="Elimina fascia" onclick="eliminaFasciaAppalto('${r.uid}')">`;
-    azione+=`<div class="azioni-turno">${bottoni}</div>`;
+    let azione='';
+    if(APPALTO_MODALITA_REPLICA){
+      const selezionabile=r.tipo==='standard'&&!ass&&r.id_dipendente&&r.inizio&&r.fine;
+      if(selezionabile)azione=`<label class="selezione-turno"><input type="checkbox" ${APPALTO_RIGHE_REPLICA.has(r.uid)?'checked':''} onchange="toggleRigaReplica('${r.uid}',this.checked)"> Seleziona</label>`;
+    }else{
+      if(ass&&r.tipo==='standard'&&!sost){const cand=candidatiSostituzione(r);azione=`<select onchange="if(this.value)sostituisciTurno('${r.uid}',this.value)"><option value="">Scegli sostituto…</option>${cand.map(d=>`<option value="${d.ID_Dipendente}">${d.Nome}</option>`).join('')}</select> `;}
+      let bottoni=`<input type="button" class="comando-input piu" value="+" title="Aggiungi un'altra mansione" aria-label="Aggiungi un'altra mansione" onclick="aggiungiMansioneAppalto('${r.uid}')">`;
+      if(r.tipo==='sostituzione'){if(r.sostituisce)bottoni+=`<span class="btn bo bsm" role="button" tabindex="0" onclick="rendiSostituzioneStandard('${r.uid}')">Rendi standard</span>`;if(!ass)bottoni+=`<input type="button" class="comando-input meno" value="−" title="Elimina fascia" aria-label="Elimina fascia" onclick="rimuoviSostituzione('${r.uid}')">`;}else if(!ass)bottoni+=`<input type="button" class="comando-input meno" value="−" title="Elimina fascia" aria-label="Elimina fascia" onclick="eliminaFasciaAppalto('${r.uid}')">`;
+      azione+=`<div class="azioni-turno">${bottoni}</div>`;
+    }
     return `<tr><td>${stato}${ass?'<br><small>'+motivoAssenza(ass)+'</small>':''}</td><td>${opzioniDipendenteAppalto(r)}</td><td>${selettoreOrarioAppalto(r,'inizio')}–${selettoreOrarioAppalto(r,'fine')}</td><td>${opzioniRepartoAppalto(r)}</td><td>${opzioniAttivitaAppalto(r)}</td><td>${durataTurno(r).toFixed(1)} h</td><td>${azione}</td></tr>`;
   }).join('');
   body.innerHTML=`<div class="stats"><div class="stat"><div class="n">${APPALTO_REPARTO==='Tutti'?DIPENDENTI.length:righe.length}</div><div class="l">${APPALTO_REPARTO==='Tutti'?'Personale Cassano':'Fasce mostrate'}</div></div><div class="stat ${nonProgrammati.length?'warn':''}"><div class="n">${nonProgrammati.length}</div><div class="l">Da programmare</div></div><div class="stat ${assenti.length?'err':''}"><div class="n">${assenti.length}</div><div class="l">Assenti / ferie</div></div><div class="stat ${conflitti?'err':''}"><div class="n">${conflitti}</div><div class="l">Fasce sovrapposte</div></div><div class="stat ${nonCollegati?'warn':''}"><div class="n">${nonCollegati}</div><div class="l">Dati da collegare</div></div></div><div class="tw"><table class="tabella-programmazione"><colgroup><col style="width:9%"><col style="width:25%"><col style="width:9%"><col style="width:14%"><col style="width:24%"><col style="width:8%"><col style="width:11%"></colgroup><thead><tr><th>Stato</th><th>Persona</th><th>Orario</th><th>Reparto</th><th>Attività</th><th>Ore</th><th>Azioni</th></tr></thead><tbody>${html||'<tr><td colspan="7" class="empty">Nessun turno nel filtro selezionato.</td></tr>'}</tbody></table></div>`;
