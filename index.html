@@ -792,8 +792,24 @@ function renderTabsAppalto(){
   el.innerHTML=`<div class="daytabs no-print">${GIORNI.map((g,i)=>`<button class="daytab ${i===APPALTO_GIORNO?'on':''}" onclick="APPALTO_GIORNO=${i};renderTabsAppalto()">${g}<br><small>${fmtDataIt(addGiorni(APPALTO_LUNEDI,i))}</small></button>`).join('')}</div>`;renderCorpoAppalto();
 }
 function chiaveAssenza(id,data){return String(id)+'|'+data;}
+function offsetGiornoRigaAppalto(r){
+  const s=APPALTO_SETTIMANE[APPALTO_LUNEDI];if(!s||!r)return 0;
+  const chiave=r.id_dipendente?'id-'+r.id_dipendente:'nome-'+normalizzaNomePlanner(r.nome),giorno=Number(r.giorno);
+  const righe=s.righe.filter(x=>Number(x.giorno)===giorno&&(x.id_dipendente?'id-'+x.id_dipendente:'nome-'+normalizzaNomePlanner(x.nome))===chiave&&orarioAMinuti(x.inizio)!=null&&orarioAMinuti(x.fine)!=null);
+  const posizione=new Map(s.righe.map((x,i)=>[x.uid,i])),offset=new Map(righe.map(x=>[x.uid,0]));
+  righe.filter(x=>orarioAMinuti(x.fine)<=orarioAMinuti(x.inizio)).forEach(radice=>{
+    const coda=[{riga:radice,offset:0}],visitati=new Set([radice.uid]);
+    while(coda.length){
+      const corrente=coda.shift(),fine=orarioAMinuti(corrente.riga.fine),attraversa=orarioAMinuti(corrente.riga.fine)<=orarioAMinuti(corrente.riga.inizio),prossimoOffset=corrente.offset+(attraversa?1:0);
+      const successiva=righe.filter(x=>!visitati.has(x.uid)&&posizione.get(x.uid)>posizione.get(corrente.riga.uid)&&orarioAMinuti(x.inizio)===fine).sort((a,b)=>posizione.get(a.uid)-posizione.get(b.uid))[0];
+      if(successiva){visitati.add(successiva.uid);if(prossimoOffset>0)offset.set(successiva.uid,Math.max(offset.get(successiva.uid)||0,prossimoOffset));coda.push({riga:successiva,offset:prossimoOffset});}
+    }
+  });
+  return offset.get(r.uid)||0;
+}
+function giornoEffettivoRigaAppalto(r){return Number(r?.giorno||0)+offsetGiornoRigaAppalto(r);}
 function turnoAssente(r){
-  if(!r.id_dipendente)return null;const data=addGiorni(APPALTO_LUNEDI,r.giorno);let a=APPALTO_ASSENZE.get(chiaveAssenza(r.id_dipendente,data));
+  if(!r.id_dipendente)return null;const data=addGiorni(APPALTO_LUNEDI,giornoEffettivoRigaAppalto(r));let a=APPALTO_ASSENZE.get(chiaveAssenza(r.id_dipendente,data));
   const inizio=orarioAMinuti(r.inizio),fine=orarioAMinuti(r.fine);
   if(!a&&inizio!=null&&fine!=null&&fine<=inizio)a=APPALTO_ASSENZE.get(chiaveAssenza(r.id_dipendente,addGiorni(data,1)));
   return a||null;
@@ -801,7 +817,7 @@ function turnoAssente(r){
 function motivoAssenza(a){return a?.TipoAssenza||a?.Tipo||a?.Motivo||a?.Descrizione||a?.Causale||'Assenza / ferie';}
 function intervalloAssoluto(r){
   const i=orarioAMinuti(r.inizio),f=orarioAMinuti(r.fine);if(i==null||f==null)return null;
-  const inizio=Number(r.giorno||0)*1440+i;let fine=Number(r.giorno||0)*1440+f;if(f<=i)fine+=1440;return{inizio,fine};
+  const giorno=giornoEffettivoRigaAppalto(r),inizio=giorno*1440+i;let fine=giorno*1440+f;if(f<=i)fine+=1440;return{inizio,fine};
 }
 function intervalliSovrapposti(a,b){const x=intervalloAssoluto(a),y=intervalloAssoluto(b);return!!(x&&y&&x.inizio<y.fine&&y.inizio<x.fine);}
 function conflittiRigaAppalto(r){
@@ -809,7 +825,7 @@ function conflittiRigaAppalto(r){
   return s.righe.filter(x=>x.uid!==r.uid&&String(x.id_dipendente)===String(r.id_dipendente)&&intervalliSovrapposti(x,r));
 }
 function descrizioneConflittiAppalto(r){
-  return conflittiRigaAppalto(r).map(x=>`${ETICHETTE_TAB[Number(x.giorno)]||'Giorno '+(Number(x.giorno)+1)} ${x.inizio}–${x.fine}`).join(', ');
+  return conflittiRigaAppalto(r).map(x=>{const giorno=giornoEffettivoRigaAppalto(x);return `${ETICHETTE_TAB[giorno]||'Giorno '+(giorno+1)} ${x.inizio}–${x.fine}`;}).join(', ');
 }
 function candidatiSostituzione(turno){
   const settimana=APPALTO_SETTIMANE[APPALTO_LUNEDI];if(!settimana)return[];const data=addGiorni(APPALTO_LUNEDI,turno.giorno),notte=orarioAMinuti(turno.fine)<=orarioAMinuti(turno.inizio),dataFine=addGiorni(data,1);
@@ -929,7 +945,7 @@ function chiaveAttivitaControllo(nome){
   const n=normalizzaNomePlanner(nome);if(/compatt/.test(n))return'compattatori';if(/mulet/.test(n))return'muletto';if(/navett/.test(n))return'navetta';if(/pane/.test(n))return'pane';if(/polim|poly/.test(n))return'polimer';if(/pulizi/.test(n))return'pulizie';if(/ricev/.test(n))return'ricevimento';if(/stocc/.test(n))return'stoccaggio';if(/abbass/.test(n))return'abbassamenti';if(/cest/.test(n))return'lavaggio ceste';if(/forno/.test(n))return'lavaggio forno';return n;
 }
 function righeValideCopertura(righe){return righe.filter(r=>r.inizio&&r.fine&&(r.tipo==='sostituzione'||!turnoAssente(r)));}
-function intervalloProgrammatoControllo(r){const inizio=(Number(r.giorno)-APPALTO_GIORNO)*1440+minutiOra(r.inizio);let fine=(Number(r.giorno)-APPALTO_GIORNO)*1440+minutiOra(r.fine);if(minutiOra(r.fine)<=minutiOra(r.inizio))fine+=1440;return{inizio,fine};}
+function intervalloProgrammatoControllo(r){const giorno=giornoEffettivoRigaAppalto(r),inizio=(giorno-APPALTO_GIORNO)*1440+minutiOra(r.inizio);let fine=(giorno-APPALTO_GIORNO)*1440+minutiOra(r.fine);if(minutiOra(r.fine)<=minutiOra(r.inizio))fine+=1440;return{inizio,fine};}
 function calcolaCoperturaFasce(rep,righeSettimana){
   const fabb=CONFIG_APPALTO.fabbisogni?.[rep]?.[APPALTO_GIORNO]||[],programmate=righeValideCopertura(righeSettimana).filter(r=>chiaveRepartoControllo(r)===rep&&r.giorno>=APPALTO_GIORNO&&r.giorno<=APPALTO_GIORNO+1),dettaglio=[];
   const attivita=[...new Set(fabb.map(r=>r.attivita))];
