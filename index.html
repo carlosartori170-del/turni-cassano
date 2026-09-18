@@ -755,6 +755,7 @@ function caricaSettimanaAppalto(lunedi){
   const sel=document.getElementById('appalto-rep');if(sel)sel.innerHTML=reparti.map(r=>`<option ${r===APPALTO_REPARTO?'selected':''}>${r}</option>`).join('');
   renderTabsAppalto();
   caricaDatiOrtofruttaAppalto().then(()=>renderCorpoAppalto());
+  if(settimana)controllaAssenzeAppalto(true);
 }
 async function caricaDatiOrtofruttaAppalto(){
   if(!SB_URL.includes('eqtyfnluswalfassmlxd')){APPALTO_MSG='Errore: project ID Supabase non valido.';return;}
@@ -776,7 +777,8 @@ function renderTabsAppalto(){
 function chiaveAssenza(id,data){return String(id)+'|'+data;}
 function turnoAssente(r){
   if(!r.id_dipendente)return null;const data=addGiorni(APPALTO_LUNEDI,r.giorno);let a=APPALTO_ASSENZE.get(chiaveAssenza(r.id_dipendente,data));
-  if(!a&&orarioAMinuti(r.fine)<=orarioAMinuti(r.inizio))a=APPALTO_ASSENZE.get(chiaveAssenza(r.id_dipendente,addGiorni(data,1)));
+  const inizio=orarioAMinuti(r.inizio),fine=orarioAMinuti(r.fine);
+  if(!a&&inizio!=null&&fine!=null&&fine<=inizio)a=APPALTO_ASSENZE.get(chiaveAssenza(r.id_dipendente,addGiorni(data,1)));
   return a||null;
 }
 function motivoAssenza(a){return a?.TipoAssenza||a?.Tipo||a?.Motivo||a?.Descrizione||a?.Causale||'Assenza / ferie';}
@@ -929,13 +931,21 @@ function renderCorpoAppalto(){
   const body=document.getElementById('appalto-body');if(!body)return;const settimana=APPALTO_SETTIMANE[APPALTO_LUNEDI];
   const msg=document.getElementById('appalto-msg');if(msg)msg.innerHTML=APPALTO_MSG?`<div class="alert ${APPALTO_MSG.startsWith('Errore')?'aerr':'aok'}">${APPALTO_MSG}</div>`:'';
   if(!settimana){const of=document.getElementById('appalto-of'),controlli=document.getElementById('appalto-controlli'),personale=document.getElementById('appalto-personale');if(of)of.innerHTML='';if(controlli)controlli.innerHTML='';if(personale)personale.innerHTML='';body.innerHTML='<div class="empty">Nessuna programmazione per questa settimana. Usa “Crea dalla settimana precedente”.</div>';return;}
-  const tutteGiorno=settimana.righe.filter(r=>r.giorno===APPALTO_GIORNO);renderRiepilogoOrtofruttaAppalto(tutteGiorno);renderControlliRepartiAppalto(settimana.righe);renderDisponibilitaPersonaleAppalto(tutteGiorno);
-  let righe=tutteGiorno.filter(r=>APPALTO_REPARTO==='Tutti'||r.reparto===APPALTO_REPARTO);
-  const assenti=righe.filter(r=>r.tipo==='standard'&&turnoAssente(r)&&!sostituzioneEsistente(r.uid));if(APPALTO_SOLO_ASSENTI)righe=assenti;
-  const nonCollegati=righe.filter(r=>!r.id_dipendente||!r.id_reparto||!r.id_attivita).length,conflitti=righe.filter(r=>conflittiRigaAppalto(r).length).length;
+  const tutteGiorno=settimana.righe.filter(r=>r.giorno===APPALTO_GIORNO);renderRiepilogoOrtofruttaAppalto(tutteGiorno);renderControlliRepartiAppalto(settimana.righe);
+  const pannelloPersonale=document.getElementById('appalto-personale');if(pannelloPersonale)pannelloPersonale.innerHTML='';
+  const dipendentiProgrammati=new Set(tutteGiorno.map(r=>String(r.id_dipendente)).filter(id=>id&&id!=='null'));
+  const nonProgrammati=APPALTO_REPARTO==='Tutti'?DIPENDENTI.filter(d=>!dipendentiProgrammati.has(String(d.ID_Dipendente))).map(d=>({uid:`non-programmato-${APPALTO_GIORNO}-${d.ID_Dipendente}`,giorno:APPALTO_GIORNO,nome:d.Nome,id_dipendente:d.ID_Dipendente,reparto:'',id_reparto:null,attivita:'',id_attivita:null,inizio:'',fine:'',tipo:'non_programmato',virtuale:true})):[];
+  let righe=[...tutteGiorno.filter(r=>APPALTO_REPARTO==='Tutti'||r.reparto===APPALTO_REPARTO),...nonProgrammati];
+  const assenti=righe.filter(r=>turnoAssente(r)&&(r.virtuale||(r.tipo==='standard'&&!sostituzioneEsistente(r.uid))));if(APPALTO_SOLO_ASSENTI)righe=assenti;
+  const nonCollegati=righe.filter(r=>!r.virtuale&&(!r.id_dipendente||!r.id_reparto||!r.id_attivita)).length,conflitti=righe.filter(r=>!r.virtuale&&conflittiRigaAppalto(r).length).length;
   if(APPALTO_VISTA_PERSONE){body.innerHTML=`<div class="stats"><div class="stat"><div class="n">${righe.length}</div><div class="l">Fasce mostrate</div></div><div class="stat ${assenti.length?'err':''}"><div class="n">${assenti.length}</div><div class="l">Da sostituire</div></div><div class="stat ${conflitti?'err':''}"><div class="n">${conflitti}</div><div class="l">Fasce sovrapposte</div></div></div>${renderVistaPersoneAppalto(righe)}`;return;}
-  const html=righe.sort((a,b)=>String(a.nome||'').localeCompare(String(b.nome||''),'it',{sensitivity:'base'})||String(a.id_dipendente||'').localeCompare(String(b.id_dipendente||''))||String(a.inizio||'').localeCompare(String(b.inizio||''))).map(r=>{
+  const ordineRighe=new Map(settimana.righe.map((r,i)=>[r.uid,i]));
+  const html=righe.sort((a,b)=>String(a.nome||'').localeCompare(String(b.nome||''),'it',{sensitivity:'base'})||String(a.id_dipendente||'').localeCompare(String(b.id_dipendente||''))||String(a.inizio||'').localeCompare(String(b.inizio||''))||(ordineRighe.get(a.uid)??Number.MAX_SAFE_INTEGER)-(ordineRighe.get(b.uid)??Number.MAX_SAFE_INTEGER)).map(r=>{
     const ass=turnoAssente(r),sost=sostituzioneEsistente(r.uid),dettaglioConflitto=descrizioneConflittiAppalto(r),conflitto=!!dettaglioConflitto;let stato=r.tipo==='sostituzione'?'<span class="pill pb">Sostituzione</span>':'<span class="pill pg">Standard</span>';
+    if(r.virtuale){
+      stato=ass?'<span class="pill pr">Assente / ferie</span>':'<span class="pill py">Da programmare</span>';
+      return `<tr><td>${stato}${ass?'<br><small>'+motivoAssenza(ass)+'</small>':''}</td><td><b>${r.nome}</b></td><td>—</td><td>—</td><td>—</td><td>0.0 h</td><td class="no-print"><div class="azioni-turno"><button class="btn bo bsm btn-icona" title="Aggiungi il turno" aria-label="Aggiungi il turno" onclick="aggiungiDipendenteGiorno('${r.id_dipendente}')" ${ass?'disabled':''}>＋</button></div></td></tr>`;
+    }
     if(ass)stato=sost?'<span class="pill py">Assenza coperta</span>':'<span class="pill pr">Da sostituire</span>';if(conflitto)stato+=' <span class="pill pr">Sovrapposti</span>';
     if(conflitto)stato+=`<br><small>Con: ${dettaglioConflitto}</small>`;
     let azione='';if(ass&&r.tipo==='standard'&&!sost){const cand=candidatiSostituzione(r);azione=`<select onchange="if(this.value)sostituisciTurno('${r.uid}',this.value)"><option value="">Scegli sostituto…</option>${cand.map(d=>`<option value="${d.ID_Dipendente}">${d.Nome}</option>`).join('')}</select> `;}
@@ -944,7 +954,7 @@ function renderCorpoAppalto(){
     azione+=`<div class="azioni-turno">${bottoni}</div>`;
     return `<tr><td>${stato}${ass?'<br><small>'+motivoAssenza(ass)+'</small>':''}</td><td>${opzioniDipendenteAppalto(r)}</td><td>${selettoreOrarioAppalto(r,'inizio')}–${selettoreOrarioAppalto(r,'fine')}</td><td>${opzioniRepartoAppalto(r)}</td><td>${opzioniAttivitaAppalto(r)}</td><td>${durataTurno(r).toFixed(1)} h</td><td class="no-print">${azione}</td></tr>`;
   }).join('');
-  body.innerHTML=`<div class="stats"><div class="stat"><div class="n">${righe.length}</div><div class="l">Fasce mostrate</div></div><div class="stat ${assenti.length?'err':''}"><div class="n">${assenti.length}</div><div class="l">Da sostituire</div></div><div class="stat ${conflitti?'err':''}"><div class="n">${conflitti}</div><div class="l">Fasce sovrapposte</div></div><div class="stat ${nonCollegati?'warn':''}"><div class="n">${nonCollegati}</div><div class="l">Dati da collegare</div></div></div><div class="tw"><table><thead><tr><th>Stato</th><th>Persona</th><th>Orario</th><th>Reparto</th><th>Attività</th><th>Ore</th><th class="no-print">Azioni</th></tr></thead><tbody>${html||'<tr><td colspan="7" class="empty">Nessun turno nel filtro selezionato.</td></tr>'}</tbody></table></div>`;
+  body.innerHTML=`<div class="stats"><div class="stat"><div class="n">${APPALTO_REPARTO==='Tutti'?DIPENDENTI.length:righe.length}</div><div class="l">${APPALTO_REPARTO==='Tutti'?'Personale Cassano':'Fasce mostrate'}</div></div><div class="stat ${nonProgrammati.length?'warn':''}"><div class="n">${nonProgrammati.length}</div><div class="l">Da programmare</div></div><div class="stat ${assenti.length?'err':''}"><div class="n">${assenti.length}</div><div class="l">Assenti / ferie</div></div><div class="stat ${conflitti?'err':''}"><div class="n">${conflitti}</div><div class="l">Fasce sovrapposte</div></div><div class="stat ${nonCollegati?'warn':''}"><div class="n">${nonCollegati}</div><div class="l">Dati da collegare</div></div></div><div class="tw"><table><thead><tr><th>Stato</th><th>Persona</th><th>Orario</th><th>Reparto</th><th>Attività</th><th>Ore</th><th class="no-print">Azioni</th></tr></thead><tbody>${html||'<tr><td colspan="7" class="empty">Nessun turno nel filtro selezionato.</td></tr>'}</tbody></table></div>`;
 }
 function creaDaSettimanaPrecedente(){
   const precedente=addGiorni(APPALTO_LUNEDI,-7);let base=APPALTO_SETTIMANE[precedente];
@@ -954,14 +964,14 @@ function creaDaSettimanaPrecedente(){
   let seq=0;const righe=base.righe.filter(r=>r.tipo!=='sostituzione').map(r=>({...structuredClone(r),uid:'std-'+Date.now()+'-'+seq++,tipo:'standard',sostituisce:undefined}));
   APPALTO_SETTIMANE[APPALTO_LUNEDI]={stato:'bozza',origine:'Settimana precedente '+precedente,righe};salvaSettimaneAppalto();caricaSettimanaAppalto(APPALTO_LUNEDI);APPALTO_MSG='Settimana creata dalla precedente; le sostituzioni temporanee non sono state copiate.';renderCorpoAppalto();controllaAssenzeAppalto();
 }
-async function controllaAssenzeAppalto(){
+async function controllaAssenzeAppalto(silenzioso=false){
   if(!SB_URL.includes('eqtyfnluswalfassmlxd')){APPALTO_MSG='Errore: project ID Supabase non valido.';renderCorpoAppalto();return;}
   const settimana=APPALTO_SETTIMANE[APPALTO_LUNEDI];if(!settimana){toast('Prima crea la settimana.','warn');return;}
   const ids=[...new Set(DIPENDENTI.map(r=>r.ID_Dipendente).filter(Boolean))];if(!ids.length){APPALTO_MSG='Nessun dipendente attivo associato al magazzino di Cassano.';renderCorpoAppalto();return;}
   const date=[...Array(8)].map((_,i)=>addGiorni(APPALTO_LUNEDI,i));
   const{data,error}=await sb.from('Assenze').select('*').in('ID_Dipendente',ids).in('Data',date);
   if(error){APPALTO_MSG='Errore nel controllo assenze: '+error.message;renderCorpoAppalto();return;}
-  APPALTO_ASSENZE=new Map((data||[]).map(a=>[chiaveAssenza(a.ID_Dipendente,a.Data),a]));APPALTO_ASSENZE_VERIFICATE=true;APPALTO_MSG='Controllo completato in sola lettura su tutto il personale Cassano: '+(data||[]).length+' assenze/ferie trovate nelle date interessate.';renderCorpoAppalto();
+  APPALTO_ASSENZE=new Map((data||[]).map(a=>[chiaveAssenza(a.ID_Dipendente,a.Data),a]));APPALTO_ASSENZE_VERIFICATE=true;if(!silenzioso)APPALTO_MSG='Controllo completato in sola lettura su tutto il personale Cassano: '+(data||[]).length+' assenze/ferie trovate nelle date interessate.';renderCorpoAppalto();
 }
 function sostituisciTurno(uid,id){
   const settimana=APPALTO_SETTIMANE[APPALTO_LUNEDI],originale=settimana?.righe.find(r=>r.uid===uid),dip=DIPENDENTI.find(d=>String(d.ID_Dipendente)===String(id));if(!originale||!dip)return;
