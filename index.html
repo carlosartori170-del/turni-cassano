@@ -896,7 +896,7 @@ function apriReplicaSettimana(uid){
   if(!r.id_dipendente||!r.inizio||!r.fine){toast('Completa prima persona e orario del turno.','warn');return;}
   APPALTO_REPLICA_UID=uid;let overlay=document.getElementById('replica-settimana-overlay');
   if(!overlay){
-    document.body.insertAdjacentHTML('beforeend',`<div id="replica-settimana-overlay" class="replica-overlay" role="dialog" aria-modal="true" aria-labelledby="replica-settimana-titolo"><div class="replica-card"><h3 id="replica-settimana-titolo">Replica turno nella settimana</h3><p id="replica-settimana-descrizione"></p><div id="replica-settimana-giorni" class="replica-giorni"></div><div class="brow" style="justify-content:flex-end"><button class="btn bo" type="button" onclick="chiudiReplicaSettimana()">Annulla</button><button class="btn bv" type="button" onclick="confermaReplicaSettimana()">Replica nei giorni scelti</button></div></div></div>`);
+    document.body.insertAdjacentHTML('beforeend',`<div id="replica-settimana-overlay" class="replica-overlay" role="dialog" aria-modal="true" aria-labelledby="replica-settimana-titolo"><div class="replica-card"><h3 id="replica-settimana-titolo">Replica turno nella settimana</h3><p id="replica-settimana-descrizione"></p><div class="alert awarn">Nei giorni scelti, tutte le righe già presenti di questa persona saranno sostituite da questo turno.</div><div id="replica-settimana-giorni" class="replica-giorni"></div><div class="brow" style="justify-content:flex-end"><button class="btn bo" type="button" onclick="chiudiReplicaSettimana()">Annulla</button><button class="btn bv" type="button" onclick="confermaReplicaSettimana()">Sostituisci nei giorni scelti</button></div></div></div>`);
     overlay=document.getElementById('replica-settimana-overlay');overlay.addEventListener('click',e=>{if(e.target===overlay)chiudiReplicaSettimana();});
   }
   document.getElementById('replica-settimana-descrizione').textContent=`${nomeVisualizzatoRigaAppalto(r)} · ${r.inizio}–${r.fine} · ${r.reparto||'Reparto da collegare'} / ${r.attivita||'Attività da collegare'}`;
@@ -904,24 +904,26 @@ function apriReplicaSettimana(uid){
   overlay.style.display='flex';
 }
 function chiudiReplicaSettimana(){const overlay=document.getElementById('replica-settimana-overlay');if(overlay)overlay.style.display='none';APPALTO_REPLICA_UID=null;}
-function stessaFasciaAppalto(a,b){
+function stessaPersonaAppalto(a,b){
   const persona=x=>x.id_dipendente?'id-'+x.id_dipendente:'nome-'+normalizzaNomePlanner(x.nome);
-  return persona(a)===persona(b)&&String(a.id_reparto||'')===String(b.id_reparto||'')&&String(a.id_attivita||'')===String(b.id_attivita||'')&&String(a.reparto||'')===String(b.reparto||'')&&String(a.attivita||'')===String(b.attivita||'')&&a.inizio===b.inizio&&a.fine===b.fine&&a.tipo==='standard';
+  return persona(a)===persona(b);
 }
 function confermaReplicaSettimana(){
   const s=APPALTO_SETTIMANE[APPALTO_LUNEDI],base=s?.righe.find(r=>r.uid===APPALTO_REPLICA_UID);if(!s||!base){chiudiReplicaSettimana();return;}
   const giorni=[...document.querySelectorAll('#replica-settimana-giorni input:checked:not(:disabled)')].map(x=>Number(x.value));
   if(!giorni.length){toast('Seleziona almeno un giorno in cui replicare il turno.','warn');return;}
-  let aggiunti=0,giaPresenti=0,assenze=0;
+  let aggiunti=0,righeSostituite=0,assenze=0;
   giorni.forEach(giorno=>{
     const data=addGiorni(APPALTO_LUNEDI,giorno);
     if(base.id_dipendente&&APPALTO_ASSENZE.has(chiaveAssenza(base.id_dipendente,data))){assenze++;return;}
-    if(s.righe.some(r=>Number(r.giorno)===giorno&&stessaFasciaAppalto(r,base))){giaPresenti++;return;}
+    const daSostituire=s.righe.filter(r=>Number(r.giorno)===giorno&&stessaPersonaAppalto(r,base)),uidDaSostituire=new Set(daSostituire.map(r=>r.uid));
+    righeSostituite+=daSostituire.length;
+    s.righe=s.righe.filter(r=>!uidDaSostituire.has(r.uid)&&!uidDaSostituire.has(r.sostituisce));
     const copia={...structuredClone(base),uid:'std-'+Date.now()+'-'+giorno+'-'+Math.random().toString(36).slice(2,6),giorno,tipo:'standard',sostituisce:undefined};
     s.righe.push(copia);aggiunti++;
   });
   salvaSettimaneAppalto();chiudiReplicaSettimana();renderCorpoAppalto();
-  const note=[aggiunti+' turni replicati'];if(giaPresenti)note.push(giaPresenti+' già presenti');if(assenze)note.push(assenze+' giorni saltati per assenza/ferie');toast(note.join(' · '),assenze?'warn':undefined);
+  const note=[aggiunti+' giorni aggiornati'];if(righeSostituite)note.push(righeSostituite+' righe precedenti sostituite');if(assenze)note.push(assenze+' giorni saltati per assenza/ferie');toast(note.join(' · '),assenze?'warn':undefined);
 }
 function ordinaNominativiAppalto(){
   const s=APPALTO_SETTIMANE[APPALTO_LUNEDI];if(!s)return;
