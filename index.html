@@ -149,6 +149,9 @@ tr:hover td{background:#f5fbf7;}
 .turnigrid{border-collapse:collapse;font-size:0.78rem;}
 .turnigrid th,.turnigrid td{border:1px solid var(--bordo);padding:4px 6px;}
 .turnigrid th{background:var(--sfondo);font-size:0.66rem;text-transform:uppercase;color:var(--grigio);}
+.tabella-copertura{min-width:920px;}
+.tabella-copertura .gruppo-colonne{text-align:center;border-left:1px solid var(--bordo);border-right:1px solid var(--bordo);}
+.tabella-copertura .valore-numero{text-align:right;white-space:nowrap;}
 .turnigrid td.nome{font-weight:700;white-space:nowrap;background:#fafffa;position:sticky;left:0;}
 
 @media print{
@@ -1053,8 +1056,13 @@ function calcolaCoperturaFasce(rep,righeSettimana){
   return{rep,titolo:CONTROLLO_REPARTI_FASCE[rep],dettaglio,oreRichieste,oreCoperte,oreMancanti,completo:oreRichieste>0&&oreMancanti<0.01};
 }
 function htmlCoperturaFasce(esito,aperto){
-  const righe=esito.dettaglio.map(x=>{const manca=Math.max(0,x.necessarie-x.presenti),extra=Math.max(0,x.presenti-x.necessarie);return `<tr><td>${x.attivita}</td><td>${oraMinuti(x.inizio)}–${oraMinuti(x.fine)}</td><td>${x.necessarie}</td><td>${x.presenti}</td><td>${manca?`<span class="pill pr">Manca ${manca}</span>`:extra?`<span class="pill py">Coperta +${extra}</span>`:'<span class="pill pg">Coperta</span>'}</td></tr>`;}).join('');
-  return `<details class="cfg-section" ${aperto?'open':''}><summary>Controllo ${esito.titolo} — ${esito.oreMancanti?esito.oreMancanti.toFixed(1)+' ore-persona mancanti':'copertura completa'}</summary><div class="cfg-body"><div class="tw"><table><thead><tr><th>Attività</th><th>Fascia</th><th>Necessarie</th><th>Programmate</th><th>Stato</th></tr></thead><tbody>${righe||'<tr><td colspan="5" class="empty">Nessun fabbisogno configurato per questa giornata.</td></tr>'}</tbody></table></div></div></details>`;
+  const righe=esito.dettaglio.map(x=>{
+    const durata=(x.fine-x.inizio)/60,mancaPersone=Math.max(0,x.necessarie-x.presenti),extraPersone=Math.max(0,x.presenti-x.necessarie),oreNecessarie=durata*x.necessarie,oreProgrammate=durata*x.presenti,oreMancanti=Math.max(0,oreNecessarie-oreProgrammate),oreAggiunte=Math.max(0,oreProgrammate-oreNecessarie);
+    const statoPersone=mancaPersone?`<span class="pill pr">Manca ${mancaPersone}</span>`:extraPersone?`<span class="pill py">+${extraPersone}</span>`:'<span class="pill pg">Coperta</span>';
+    const statoOre=oreMancanti?`<span class="pill pr">Mancano ${oreMancanti.toFixed(1)} h</span>`:oreAggiunte?`<span class="pill py">+${oreAggiunte.toFixed(1)} h</span>`:'<span class="pill pg">Coperta</span>';
+    return `<tr><td>${x.attivita}</td><td>${oraMinuti(x.inizio)}–${oraMinuti(x.fine)}</td><td class="valore-numero">${x.necessarie}</td><td class="valore-numero">${x.presenti}</td><td>${statoPersone}</td><td class="valore-numero">${oreNecessarie.toFixed(1)} h</td><td class="valore-numero">${oreProgrammate.toFixed(1)} h</td><td>${statoOre}</td></tr>`;
+  }).join('');
+  return `<details class="cfg-section" ${aperto?'open':''}><summary>Controllo ${esito.titolo} — ${esito.oreMancanti?esito.oreMancanti.toFixed(1)+' ore-persona mancanti':'copertura completa'}</summary><div class="cfg-body"><div class="tw"><table class="tabella-copertura"><thead><tr><th rowspan="2">Attività</th><th rowspan="2">Fascia</th><th colspan="3" class="gruppo-colonne">Persone</th><th colspan="3" class="gruppo-colonne">Ore-persona</th></tr><tr><th>Necessarie</th><th>Programmate</th><th>Stato</th><th>Necessarie</th><th>Programmate</th><th>Stato</th></tr></thead><tbody>${righe||'<tr><td colspan="8" class="empty">Nessun fabbisogno configurato per questa giornata.</td></tr>'}</tbody></table></div></div></details>`;
 }
 function calcolaControlloCarico(righeSettimana){const richieste=Number(CONFIG_APPALTO.carico?.[APPALTO_GIORNO])||0,programmate=righeValideCopertura(righeSettimana).filter(r=>r.giorno===APPALTO_GIORNO&&chiaveRepartoControllo(r)==='carico').reduce((s,r)=>s+durataTurno(r),0);return{richieste,programmate,mancanti:Math.max(0,richieste-programmate),completo:richieste>0&&programmate>=richieste};}
 function renderControlliRepartiAppalto(righeSettimana){
