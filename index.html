@@ -1047,25 +1047,26 @@ function chiaveAttivitaControllo(nome){
 function righeValideCopertura(righe){return righe.filter(r=>r.inizio&&r.fine&&(r.tipo==='sostituzione'||!turnoAssente(r)));}
 function intervalloProgrammatoControllo(r){const giorno=giornoEffettivoRigaAppalto(r),inizio=(giorno-APPALTO_GIORNO)*1440+minutiOra(r.inizio);let fine=(giorno-APPALTO_GIORNO)*1440+minutiOra(r.fine);if(minutiOra(r.fine)<=minutiOra(r.inizio))fine+=1440;return{inizio,fine};}
 function calcolaCoperturaFasce(rep,righeSettimana){
-  const fabb=CONFIG_APPALTO.fabbisogni?.[rep]?.[APPALTO_GIORNO]||[],programmate=righeValideCopertura(righeSettimana).filter(r=>chiaveRepartoControllo(r)===rep&&r.giorno>=APPALTO_GIORNO&&r.giorno<=APPALTO_GIORNO+1),dettaglio=[];
-  const attivita=[...new Set(fabb.map(r=>r.attivita))];
-  attivita.forEach(att=>{
-    const req=fabb.filter(r=>r.attivita===att),intervalli=req.map(intervalloFabbisogno),da=Math.floor(Math.min(...intervalli.map(x=>x.inizio))/30)*30,a=Math.ceil(Math.max(...intervalli.map(x=>x.fine))/30)*30;
-    for(let m=da;m<a;m+=30){
-      const necessarie=req.filter(r=>{const x=intervalloFabbisogno(r);return x.inizio<=m&&x.fine>m;}).reduce((s,r)=>s+Number(r.persone||0),0);if(!necessarie)continue;
-      const presenti=programmate.filter(r=>{const x=intervalloProgrammatoControllo(r),attOk=rep==='ceste'||rep==='forno'||chiaveAttivitaControllo(r.attivita)===chiaveAttivitaControllo(att);return attOk&&x.inizio<=m&&x.fine>m;}).length;
-      const precedente=dettaglio.at(-1);if(precedente&&precedente.attivita===att&&precedente.fine===m&&precedente.necessarie===necessarie&&precedente.presenti===presenti)precedente.fine=m+30;else dettaglio.push({attivita:att,inizio:m,fine:m+30,necessarie,presenti});
+  const fabb=CONFIG_APPALTO.fabbisogni?.[rep]?.[APPALTO_GIORNO]||[],programmate=righeValideCopertura(righeSettimana).filter(r=>chiaveRepartoControllo(r)===rep&&r.giorno>=APPALTO_GIORNO&&r.giorno<=APPALTO_GIORNO+1);
+  const dettaglio=fabb.filter(f=>Number(f.persone||0)>0).map(f=>{
+    const intervallo=intervalloFabbisogno(f),necessarie=Number(f.persone||0),campioni=[];let oreProgrammate=0,oreMancanti=0,oreAggiunte=0;
+    for(let m=intervallo.inizio;m<intervallo.fine;m+=30){
+      const fineCampione=Math.min(m+30,intervallo.fine),durata=(fineCampione-m)/60;
+      const presenti=programmate.filter(r=>{const x=intervalloProgrammatoControllo(r),attOk=rep==='ceste'||rep==='forno'||chiaveAttivitaControllo(r.attivita)===chiaveAttivitaControllo(f.attivita);return attOk&&x.inizio<=m&&x.fine>m;}).length;
+      campioni.push(presenti);oreProgrammate+=presenti*durata;oreMancanti+=Math.max(0,necessarie-presenti)*durata;oreAggiunte+=Math.max(0,presenti-necessarie)*durata;
     }
+    const presentiMin=campioni.length?Math.min(...campioni):0,presentiMax=campioni.length?Math.max(...campioni):0,durata=(intervallo.fine-intervallo.inizio)/60;
+    return{attivita:f.attivita,inizio:intervallo.inizio,fine:intervallo.fine,necessarie,presentiMin,presentiMax,oreNecessarie:durata*necessarie,oreProgrammate,oreMancanti,oreAggiunte,mancaPersoneMax:Math.max(0,necessarie-presentiMin),extraPersoneMax:Math.max(0,presentiMax-necessarie)};
   });
-  const oreRichieste=dettaglio.reduce((s,x)=>s+(x.fine-x.inizio)/60*x.necessarie,0),oreCoperte=dettaglio.reduce((s,x)=>s+(x.fine-x.inizio)/60*Math.min(x.presenti,x.necessarie),0),oreMancanti=Math.max(0,oreRichieste-oreCoperte);
+  const oreRichieste=dettaglio.reduce((s,x)=>s+x.oreNecessarie,0),oreMancanti=dettaglio.reduce((s,x)=>s+x.oreMancanti,0),oreCoperte=Math.max(0,oreRichieste-oreMancanti);
   return{rep,titolo:CONTROLLO_REPARTI_FASCE[rep],dettaglio,oreRichieste,oreCoperte,oreMancanti,completo:oreRichieste>0&&oreMancanti<0.01};
 }
 function htmlCoperturaFasce(esito,aperto){
   const righe=esito.dettaglio.map(x=>{
-    const durata=(x.fine-x.inizio)/60,mancaPersone=Math.max(0,x.necessarie-x.presenti),extraPersone=Math.max(0,x.presenti-x.necessarie),oreNecessarie=durata*x.necessarie,oreProgrammate=durata*x.presenti,oreMancanti=Math.max(0,oreNecessarie-oreProgrammate),oreAggiunte=Math.max(0,oreProgrammate-oreNecessarie);
-    const statoPersone=mancaPersone?`<span class="pill pr">Manca ${mancaPersone}</span>`:extraPersone?`<span class="pill py">+${extraPersone}</span>`:'<span class="pill pg">Coperta</span>';
-    const statoOre=oreMancanti?`<span class="pill pr">Mancano ${oreMancanti.toFixed(1)} h</span>`:oreAggiunte?`<span class="pill py">+${oreAggiunte.toFixed(1)} h</span>`:'<span class="pill pg">Coperta</span>';
-    return `<tr><td>${x.attivita}</td><td>${oraMinuti(x.inizio)}–${oraMinuti(x.fine)}</td><td class="valore-numero">${x.necessarie}</td><td class="valore-numero">${x.presenti}</td><td>${statoPersone}</td><td class="valore-numero">${oreNecessarie.toFixed(1)} h</td><td class="valore-numero">${oreProgrammate.toFixed(1)} h</td><td>${statoOre}</td></tr>`;
+    const programmate=x.presentiMin===x.presentiMax?String(x.presentiMin):`${x.presentiMin}–${x.presentiMax}`;
+    const statiPersone=[];if(x.mancaPersoneMax)statiPersone.push(`<span class="pill pr">Fino a ${x.mancaPersoneMax} ${x.mancaPersoneMax===1?'mancante':'mancanti'}</span>`);if(x.extraPersoneMax)statiPersone.push(`<span class="pill py">Fino a +${x.extraPersoneMax}</span>`);if(!statiPersone.length)statiPersone.push('<span class="pill pg">Coperta</span>');
+    const statiOre=[];if(x.oreMancanti)statiOre.push(`<span class="pill pr">Mancano ${x.oreMancanti.toFixed(1)} h</span>`);if(x.oreAggiunte)statiOre.push(`<span class="pill py">+${x.oreAggiunte.toFixed(1)} h</span>`);if(!statiOre.length)statiOre.push('<span class="pill pg">Coperta</span>');
+    return `<tr><td>${x.attivita}</td><td>${oraMinuti(x.inizio)}–${oraMinuti(x.fine)}</td><td class="valore-numero">${x.necessarie}</td><td class="valore-numero">${programmate}</td><td>${statiPersone.join(' ')}</td><td class="valore-numero">${x.oreNecessarie.toFixed(1)} h</td><td class="valore-numero">${x.oreProgrammate.toFixed(1)} h</td><td>${statiOre.join(' ')}</td></tr>`;
   }).join('');
   return `<details class="cfg-section" ${aperto?'open':''}><summary>Controllo ${esito.titolo} — ${esito.oreMancanti?esito.oreMancanti.toFixed(1)+' ore-persona mancanti':'copertura completa'}</summary><div class="cfg-body"><div class="tw"><table class="tabella-copertura"><thead><tr><th rowspan="2">Attività</th><th rowspan="2">Fascia</th><th colspan="3" class="gruppo-colonne">Persone</th><th colspan="3" class="gruppo-colonne">Ore-persona</th></tr><tr><th>Necessarie</th><th>Programmate</th><th>Stato</th><th>Necessarie</th><th>Programmate</th><th>Stato</th></tr></thead><tbody>${righe||'<tr><td colspan="8" class="empty">Nessun fabbisogno configurato per questa giornata.</td></tr>'}</tbody></table></div></div></details>`;
 }
