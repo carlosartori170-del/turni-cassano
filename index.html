@@ -154,6 +154,8 @@ tr:hover td{background:#f5fbf7;}
 .tabella-copertura .valore-numero{text-align:right;white-space:nowrap;}
 .filtri-programmazione{margin:14px 0;padding:13px;border:1px solid var(--bordo);border-radius:8px;background:var(--sfondo);}
 .filtri-programmazione .ct{margin-bottom:10px;padding-bottom:6px;}
+.scelta-assenza{display:flex;align-items:center;gap:6px;flex-wrap:wrap;}
+.scelta-assenza select{min-width:150px;flex:1;}
 .turnigrid td.nome{font-weight:700;white-space:nowrap;background:#fafffa;position:sticky;left:0;}
 
 @media print{
@@ -975,6 +977,14 @@ function ordinaNominativiAppalto(){
   salvaSettimaneAppalto();renderCorpoAppalto();toast('Nominativi riordinati dalla A alla Z.');
 }
 function eliminaFasciaAppalto(uid){if(!confirm('Eliminare questa fascia dalla bozza locale?'))return;const s=APPALTO_SETTIMANE[APPALTO_LUNEDI];s.righe=s.righe.filter(r=>r.uid!==uid&&r.sostituisce!==uid);salvaSettimaneAppalto();renderCorpoAppalto();}
+function confermaFerieSenzaSostituto(idDipendente){
+  const s=APPALTO_SETTIMANE[APPALTO_LUNEDI],dip=DIPENDENTI.find(d=>String(d.ID_Dipendente)===String(idDipendente));if(!s||!dip)return;
+  const righePersona=s.righe.filter(r=>Number(r.giorno)===APPALTO_GIORNO&&String(r.id_dipendente)===String(idDipendente)&&r.tipo!=='riposo');
+  if(!righePersona.length){toast('Il dipendente risulta già in ferie senza turni programmati.','warn');return;}
+  if(!confirm(`Confermare le ferie di ${dip.Nome} senza scegliere ora un sostituto? Le ${righePersona.length===1?'fascia programmata verrà rimossa':'fasce programmate verranno rimosse'}, ma il dipendente resterà visibile nell’elenco come assente.`))return;
+  const uidRimossi=new Set(righePersona.map(r=>r.uid));s.righe=s.righe.filter(r=>!uidRimossi.has(r.uid)&&!uidRimossi.has(r.sostituisce));
+  salvaSettimaneAppalto();renderCorpoAppalto();toast(`Ferie confermate per ${dip.Nome}. Il sostituto potrà essere programmato separatamente.`);
+}
 function impostaRiposoAppalto(idDipendente){
   const s=APPALTO_SETTIMANE[APPALTO_LUNEDI],d=DIPENDENTI.find(x=>String(x.ID_Dipendente)===String(idDipendente));if(!s||!d)return;
   const data=addGiorni(APPALTO_LUNEDI,APPALTO_GIORNO),assenza=APPALTO_ASSENZE.get(chiaveAssenza(d.ID_Dipendente,data));
@@ -1112,7 +1122,7 @@ function renderCorpoAppalto(){
   const tutteGiorno=settimana.righe.filter(r=>r.giorno===APPALTO_GIORNO);renderRiepilogoOrtofruttaAppalto(tutteGiorno);renderControlliRepartiAppalto(settimana.righe);renderFiltriProgrammazioneAppalto(tutteGiorno);
   const pannelloPersonale=document.getElementById('appalto-personale');if(pannelloPersonale)pannelloPersonale.innerHTML='';
   const dipendentiProgrammati=new Set(tutteGiorno.map(r=>String(r.id_dipendente)).filter(id=>id&&id!=='null'));
-  const nonProgrammati=APPALTO_REPARTO==='Tutti'?DIPENDENTI.filter(d=>!dipendentiProgrammati.has(String(d.ID_Dipendente))).map(d=>({uid:`non-programmato-${APPALTO_GIORNO}-${d.ID_Dipendente}`,giorno:APPALTO_GIORNO,nome:d.Nome,id_dipendente:d.ID_Dipendente,reparto:'',id_reparto:null,attivita:'',id_attivita:null,inizio:'',fine:'',tipo:'non_programmato',virtuale:true})):[];
+  const nonProgrammati=DIPENDENTI.filter(d=>!dipendentiProgrammati.has(String(d.ID_Dipendente))).map(d=>({uid:`non-programmato-${APPALTO_GIORNO}-${d.ID_Dipendente}`,giorno:APPALTO_GIORNO,nome:d.Nome,id_dipendente:d.ID_Dipendente,reparto:'',id_reparto:null,attivita:'',id_attivita:null,inizio:'',fine:'',tipo:'non_programmato',virtuale:true}));
   let righe=[...tutteGiorno.filter(r=>APPALTO_REPARTO==='Tutti'||r.reparto===APPALTO_REPARTO),...nonProgrammati];
   const filtroPersona=normalizzaNomePlanner(APPALTO_FILTRO_PERSONA),filtriAttivi=!!(filtroPersona||APPALTO_FILTRO_REPARTO||APPALTO_FILTRO_ATTIVITA);
   if(filtriAttivi)righe=righe.filter(r=>(!filtroPersona||normalizzaNomePlanner(nomeVisualizzatoRigaAppalto(r)).includes(filtroPersona))&&(!APPALTO_FILTRO_REPARTO||normalizzaNomePlanner(r.reparto)===APPALTO_FILTRO_REPARTO)&&(!APPALTO_FILTRO_ATTIVITA||normalizzaNomePlanner(r.attivita)===APPALTO_FILTRO_ATTIVITA));
@@ -1140,11 +1150,11 @@ function renderCorpoAppalto(){
       const selezionabile=r.tipo==='standard'&&!ass&&r.id_dipendente&&r.inizio&&r.fine;
       if(selezionabile)azione=`<label class="selezione-turno"><input type="checkbox" ${APPALTO_RIGHE_REPLICA.has(r.uid)?'checked':''} onchange="toggleRigaReplica('${r.uid}',this.checked)"> Seleziona</label>`;
     }else{
-      if(ass&&r.tipo==='standard'&&!sost){const cand=candidatiSostituzione(r);azione=`<select onchange="if(this.value)sostituisciTurno('${r.uid}',this.value)"><option value="">Scegli sostituto…</option>${cand.map(d=>`<option value="${d.ID_Dipendente}">${d.Nome}</option>`).join('')}</select> `;}
-      let bottoni=`<input type="button" class="comando-input piu" value="+" title="Aggiungi un'altra mansione" aria-label="Aggiungi un'altra mansione" onclick="aggiungiMansioneAppalto('${r.uid}')">`;
+      if(ass&&r.tipo==='standard'&&!sost){const cand=candidatiSostituzione(r);azione=`<div class="scelta-assenza"><select onchange="if(this.value)sostituisciTurno('${r.uid}',this.value)"><option value="">Scegli sostituto…</option>${cand.map(d=>`<option value="${d.ID_Dipendente}">${d.Nome}</option>`).join('')}</select><button class="btn bo bsm" type="button" onclick="confermaFerieSenzaSostituto('${r.id_dipendente}')">Conferma ferie</button></div>`;}
+      let bottoni=ass?'':`<input type="button" class="comando-input piu" value="+" title="Aggiungi un'altra mansione" aria-label="Aggiungi un'altra mansione" onclick="aggiungiMansioneAppalto('${r.uid}')">`;
       if(r.tipo==='standard'&&!ass)bottoni+=`<input type="button" class="btn-riposo" value="R" title="Sostituisci i turni di questa giornata con un giorno di riposo" aria-label="Imposta giorno di riposo" onclick="impostaRiposoAppalto('${r.id_dipendente}')">`;
       if(r.tipo==='sostituzione'){if(r.sostituisce)bottoni+=`<span class="btn bo bsm" role="button" tabindex="0" onclick="rendiSostituzioneStandard('${r.uid}')">Rendi standard</span>`;if(!ass)bottoni+=`<input type="button" class="comando-input meno" value="−" title="Elimina fascia" aria-label="Elimina fascia" onclick="rimuoviSostituzione('${r.uid}')">`;}else if(!ass)bottoni+=`<input type="button" class="comando-input meno" value="−" title="Elimina fascia" aria-label="Elimina fascia" onclick="eliminaFasciaAppalto('${r.uid}')">`;
-      azione+=`<div class="azioni-turno">${bottoni}</div>`;
+      if(bottoni)azione+=`<div class="azioni-turno">${bottoni}</div>`;
     }
     return `<tr><td>${stato}${ass?'<br><small>'+motivoAssenza(ass)+'</small>':''}</td><td>${opzioniDipendenteAppalto(r)}</td><td>${selettoreOrarioAppalto(r,'inizio')}–${selettoreOrarioAppalto(r,'fine')}</td><td>${opzioniRepartoAppalto(r)}</td><td>${opzioniAttivitaAppalto(r)}</td><td>${durataTurno(r).toFixed(1)} h</td><td>${azione}</td></tr>`;
   }).join('');
