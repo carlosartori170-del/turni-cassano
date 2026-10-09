@@ -1086,15 +1086,39 @@ function intervalloProgrammatoControllo(r){const inizio=minutiOra(r.inizio);let 
 function calcolaCoperturaFasce(rep,righeSettimana){
   normalizzaFabbisogniCatalogo();
   const fabb=CONFIG_APPALTO.fabbisogni?.[rep]?.[APPALTO_GIORNO]||[],programmate=righeValideCopertura(righeSettimana).filter(r=>chiaveRepartoControllo(r)===rep&&Number(r.giorno)===APPALTO_GIORNO);
-  const dettaglio=fabb.filter(f=>Number(f.persone||0)>0).map(f=>{
-    const intervallo=intervalloFabbisogno(f),necessarie=Number(f.persone||0),campioni=[];let oreProgrammate=0,oreMancanti=0,oreAggiunte=0;
-    for(let m=intervallo.inizio;m<intervallo.fine;m+=30){
-      const fineCampione=Math.min(m+30,intervallo.fine),durata=(fineCampione-m)/60;
-      const presenti=programmate.filter(r=>{const x=intervalloProgrammatoControllo(r),attOk=rep==='ceste'||rep==='forno'||(Number(f.id_attivita)>0&&Number(r.id_attivita)===Number(f.id_attivita));return attOk&&x.inizio<=m&&x.fine>m;}).length;
-      campioni.push(presenti);oreProgrammate+=presenti*durata;oreMancanti+=Math.max(0,necessarie-presenti)*durata;oreAggiunte+=Math.max(0,presenti-necessarie)*durata;
+  // Prima sommo il fabbisogno contemporaneo, poi confronto ogni intervallo una sola volta.
+  // Le fasce standard sovrapposte non devono duplicare le ore delle persone programmate.
+  const gruppi=new Map(),unicaAttivita=rep==='ceste'||rep==='forno';
+  const gruppo=(chiave,attivita)=>{if(!gruppi.has(chiave))gruppi.set(chiave,{attivita,fabb:[],turni:[]});return gruppi.get(chiave);};
+  fabb.filter(f=>Number(f.persone||0)>0).forEach((f,i)=>{
+    const chiave=unicaAttivita?rep:Number(f.id_attivita)>0?'id-'+Number(f.id_attivita):'non-collegata-'+i;
+    gruppo(chiave,f.attivita).fabb.push({...intervalloFabbisogno(f),persone:Number(f.persone)});
+  });
+  programmate.forEach(r=>{
+    if(!unicaAttivita&&!(Number(r.id_attivita)>0))return;
+    const chiave=unicaAttivita?rep:'id-'+Number(r.id_attivita),a=trovaAttivita(r.id_attivita);
+    gruppo(chiave,unicaAttivita?CONTROLLO_REPARTI_FASCE[rep]:a?nomeAttivita(a):r.attivita).turni.push(intervalloProgrammatoControllo(r));
+  });
+  const dettaglio=[];
+  gruppi.forEach(g=>{
+    const limiti=[...new Set([...g.fabb,...g.turni].flatMap(x=>[x.inizio,x.fine]))].sort((a,b)=>a-b);
+    let precedente=null;
+    for(let i=0;i<limiti.length-1;i++){
+      const inizio=limiti[i],fine=limiti[i+1],durata=(fine-inizio)/60;
+      const necessarie=g.fabb.filter(x=>x.inizio<=inizio&&x.fine>inizio).reduce((s,x)=>s+x.persone,0);
+      const presenti=g.turni.filter(x=>x.inizio<=inizio&&x.fine>inizio).length;
+      if(!necessarie&&!presenti){precedente=null;continue;}
+      const oreMancanti=Math.max(0,necessarie-presenti)*durata,oreAggiunte=Math.max(0,presenti-necessarie)*durata;
+      // Mantengo compatta la vista quando cambia la squadra ma non il fabbisogno.
+      if(precedente&&precedente.fine===inizio&&precedente.necessarie===necessarie){
+        precedente.fine=fine;precedente.presentiMin=Math.min(precedente.presentiMin,presenti);precedente.presentiMax=Math.max(precedente.presentiMax,presenti);
+        precedente.oreNecessarie+=necessarie*durata;precedente.oreProgrammate+=presenti*durata;precedente.oreMancanti+=oreMancanti;precedente.oreAggiunte+=oreAggiunte;
+        precedente.mancaPersoneMax=Math.max(precedente.mancaPersoneMax,necessarie-presenti);precedente.extraPersoneMax=Math.max(precedente.extraPersoneMax,presenti-necessarie);
+      }else{
+        precedente={attivita:g.attivita,inizio,fine,necessarie,presentiMin:presenti,presentiMax:presenti,oreNecessarie:necessarie*durata,oreProgrammate:presenti*durata,oreMancanti,oreAggiunte,mancaPersoneMax:Math.max(0,necessarie-presenti),extraPersoneMax:Math.max(0,presenti-necessarie)};
+        dettaglio.push(precedente);
+      }
     }
-    const presentiMin=campioni.length?Math.min(...campioni):0,presentiMax=campioni.length?Math.max(...campioni):0,durata=(intervallo.fine-intervallo.inizio)/60;
-    return{attivita:f.attivita,inizio:intervallo.inizio,fine:intervallo.fine,necessarie,presentiMin,presentiMax,oreNecessarie:durata*necessarie,oreProgrammate,oreMancanti,oreAggiunte,mancaPersoneMax:Math.max(0,necessarie-presentiMin),extraPersoneMax:Math.max(0,presentiMax-necessarie)};
   });
   const oreRichieste=dettaglio.reduce((s,x)=>s+x.oreNecessarie,0),oreProgrammate=dettaglio.reduce((s,x)=>s+x.oreProgrammate,0),oreMancanti=dettaglio.reduce((s,x)=>s+x.oreMancanti,0),oreAggiunte=dettaglio.reduce((s,x)=>s+x.oreAggiunte,0),oreCoperte=Math.max(0,oreRichieste-oreMancanti);
   return{rep,titolo:CONTROLLO_REPARTI_FASCE[rep],dettaglio,oreRichieste,oreProgrammate,oreCoperte,oreMancanti,oreAggiunte,completo:oreRichieste>0&&oreMancanti<0.01&&oreAggiunte<0.01};
