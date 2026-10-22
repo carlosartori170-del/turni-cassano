@@ -1111,8 +1111,9 @@ function chiaveRepartoControllo(r){
   // Vuoti e Grocery vengono riconosciuti esclusivamente dal reparto Nexus collegato.
   if(idReparto===ID_REPARTO_VUOTI)return'vuoti';
   if(idReparto===ID_REPARTO_GROCERY)return'grocery';
-  if(/frutta|orto/.test(att))return null;if(/carico|bai/.test(att))return'carico';
-  if(/carico|bai/.test(rep))return'carico';return null;
+  // Riconoscere prima il Carico: anche «Carico frutta» contiene la parola frutta.
+  if(/carico|bai/.test(rep)||/carico|bai/.test(att))return'carico';
+  return null;
 }
 function righeValideCopertura(righe){return righe.filter(r=>r.inizio&&r.fine&&(r.tipo==='sostituzione'||!turnoAssente(r)));}
 function intervalloProgrammatoControllo(r){const inizio=minutiOra(r.inizio);let fine=minutiOra(r.fine);if(fine<=inizio)fine+=1440;return{inizio,fine};}
