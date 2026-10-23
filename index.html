@@ -5,6 +5,8 @@
 <meta name="viewport" content="width=device-width, initial-scale=1.0">
 <title>Nexus — Programmatore Appalto Cassano</title>
 <script src="https://cdn.jsdelivr.net/npm/@supabase/supabase-js@2"></script>
+<script src="https://cdn.jsdelivr.net/npm/jspdf@2.5.2/dist/jspdf.umd.min.js"></script>
+<script src="https://cdn.jsdelivr.net/npm/jspdf-autotable@3.8.4/dist/jspdf.plugin.autotable.min.js"></script>
 <style>
 @import url('https://fonts.googleapis.com/css2?family=Bebas+Neue&family=DM+Sans:wght@400;500;600;700&display=swap');
 :root{
@@ -180,6 +182,32 @@ tr:hover td{background:#f4f8f5;}
   main{padding:14px 8px;}
   .card{padding:14px;}
 }
+
+.stampa-turni-overlay{position:fixed;inset:0;z-index:10000;background:rgba(19,19,19,.72);display:flex;align-items:stretch;justify-content:center;padding:18px;}
+.stampa-turni-card{background:#fff;width:min(1900px,100%);border-radius:14px;display:flex;flex-direction:column;min-height:0;box-shadow:0 24px 70px rgba(0,0,0,.28);}
+.stampa-turni-toolbar{display:flex;align-items:center;justify-content:space-between;gap:12px;padding:14px 18px;border-bottom:1px solid var(--bordo);flex-wrap:wrap;}
+.stampa-turni-toolbar h2{font-family:'Bebas Neue',sans-serif;letter-spacing:.8px;font-size:1.55rem;margin:0;}
+.stampa-turni-scroller{overflow:auto;padding:16px;flex:1;background:#e9ece8;}
+.foglio-turni{background:#fff;margin:auto;padding:16px;min-width:1480px;box-shadow:0 3px 16px rgba(0,0,0,.13);}
+.foglio-turni-head{display:flex;justify-content:space-between;align-items:flex-end;gap:16px;margin-bottom:12px;}
+.foglio-turni-head h3{font-family:'Bebas Neue',sans-serif;font-size:1.6rem;letter-spacing:.8px;margin:0;color:#131313;}
+.foglio-turni-head p{margin:2px 0 0;color:#555;font-size:.76rem;}
+.tabella-turni-pdf{width:100%;border-collapse:collapse;table-layout:fixed;font-size:.68rem;line-height:1.2;}
+.tabella-turni-pdf th,.tabella-turni-pdf td{border:1px solid #aeb4ae;padding:4px;vertical-align:top;}
+.tabella-turni-pdf th{background:#131313;color:#fff;text-align:center;font-size:.68rem;}
+.tabella-turni-pdf th:first-child{width:15%;text-align:left;}
+.tabella-turni-pdf td:first-child{font-weight:800;background:#f2f3f0;vertical-align:middle;}
+.turno-stampa{padding:2px 3px;border-radius:3px;margin-bottom:3px;}
+.turno-stampa:last-child{margin-bottom:0;}
+.turno-stampa .ora{font-weight:800;white-space:nowrap;}
+.turno-stampa .mansione{font-size:.62rem;}
+.cella-stampa-riposo{background:#dbeafe!important;color:#1e3a8a;font-weight:800;text-align:center;vertical-align:middle!important;}
+.cella-stampa-assenza{background:#fee2e2!important;color:#991b1b;font-weight:800;text-align:center;vertical-align:middle!important;}
+.rep-ortofrutta{background:#dcfce7}.rep-carico{background:#ffedd5}.rep-lavaggio{background:#dbeafe}.rep-economia{background:#f3e8ff}.rep-vuoti{background:#fef3c7}.rep-grocery{background:#ccfbf1}.rep-altro{background:#f3f4f6}
+.legenda-turni{display:flex;flex-wrap:wrap;gap:7px 14px;margin-top:10px;font-size:.67rem;}
+.legenda-turni span{display:inline-flex;align-items:center;gap:5px}.legenda-turni i{width:13px;height:13px;border:1px solid #aeb4ae;border-radius:2px;}
+@media(max-width:700px){.stampa-turni-overlay{padding:0}.stampa-turni-card{border-radius:0}.stampa-turni-toolbar{padding:10px}.stampa-turni-scroller{padding:8px}}
+
 </style>
 </head>
 <body>
@@ -810,7 +838,7 @@ function renderProgrammazioneAppaltoTab(){
   document.getElementById('mc').innerHTML=`<div class="card"><div class="ct">Programmazione dell'intero appalto</div>
     <div class="alert aok">Programmatore unico collegato a Supabase: ogni fascia appartiene alla persona, anche quando nella stessa giornata cambia reparto o attività. Le modifiche restano in bozza sul dispositivo fino a “Salva settimana”.</div>
     <div class="g2 no-print" style="max-width:520px;"><div class="fg"><label>Lunedì della settimana</label><input type="date" id="appalto-lun" value="${APPALTO_LUNEDI}" onchange="caricaSettimanaAppalto(this.value)"></div><div class="fg"><label>Reparto</label><select id="appalto-rep" onchange="APPALTO_REPARTO=this.value;renderCorpoAppalto()"></select></div></div>
-    <div class="brow no-print"><button class="btn bv bsm" onclick="salvaSettimanaSupabase()">💾 Salva settimana</button><button class="btn bp bsm" onclick="creaDaSettimanaPrecedente()">↪ Crea dalla settimana precedente</button><button class="btn bo bsm" onclick="aggiungiFasciaAppalto()">＋ Aggiungi fascia</button><button id="appalto-seleziona-replica" class="btn bo bsm" onclick="toggleSelezioneReplica()">☑ Seleziona turni</button><button id="appalto-seleziona-filtrati" class="btn bo bsm" style="display:none" onclick="toggleReplicaFiltrati()">☑ Seleziona tutti i filtrati</button><button id="appalto-conferma-replica" class="btn bv bsm" style="display:none" onclick="apriReplicaSelezionati()">↻ Replica selezionati (0)</button><button class="btn bo bsm" onclick="ordinaNominativiAppalto()">A–Z Riordina nominativi</button><button class="btn bo bsm" onclick="controllaAssenzeAppalto()">🔎 Controlla assenze Nexus</button><button class="btn bo bsm" onclick="APPALTO_SOLO_ASSENTI=!APPALTO_SOLO_ASSENTI;renderCorpoAppalto()">Solo da sostituire</button><button class="btn bo bsm" onclick="APPALTO_VISTA_PERSONE=!APPALTO_VISTA_PERSONE;renderCorpoAppalto()">Vista persone/reparto</button><button class="btn bo bsm" onclick="window.print()">🖨 Stampa</button></div>
+    <div class="brow no-print"><button class="btn bv bsm" onclick="salvaSettimanaSupabase()">💾 Salva settimana</button><button class="btn bp bsm" onclick="creaDaSettimanaPrecedente()">↪ Crea dalla settimana precedente</button><button class="btn bo bsm" onclick="aggiungiFasciaAppalto()">＋ Aggiungi fascia</button><button id="appalto-seleziona-replica" class="btn bo bsm" onclick="toggleSelezioneReplica()">☑ Seleziona turni</button><button id="appalto-seleziona-filtrati" class="btn bo bsm" style="display:none" onclick="toggleReplicaFiltrati()">☑ Seleziona tutti i filtrati</button><button id="appalto-conferma-replica" class="btn bv bsm" style="display:none" onclick="apriReplicaSelezionati()">↻ Replica selezionati (0)</button><button class="btn bo bsm" onclick="ordinaNominativiAppalto()">A–Z Riordina nominativi</button><button class="btn bo bsm" onclick="controllaAssenzeAppalto()">🔎 Controlla assenze Nexus</button><button class="btn bo bsm" onclick="APPALTO_SOLO_ASSENTI=!APPALTO_SOLO_ASSENTI;renderCorpoAppalto()">Solo da sostituire</button><button class="btn bo bsm" onclick="APPALTO_VISTA_PERSONE=!APPALTO_VISTA_PERSONE;renderCorpoAppalto()">Vista persone/reparto</button><button class="btn bo bsm" onclick="apriAnteprimaTurniAppalto()">📄 Anteprima / PDF</button></div>
     <div id="appalto-msg"></div><div id="appalto-tabs"></div><div id="appalto-of"></div><div id="appalto-controlli"></div><div id="appalto-filtri"></div><div id="appalto-personale"></div><div id="appalto-body"></div></div>`;
   caricaSettimanaAppalto(APPALTO_LUNEDI);
 }
@@ -1298,7 +1326,7 @@ async function renderProgrammazioneTab(){
       <input type="date" id="prog-lun" value="${lun}" onchange="caricaProgrammazioneSettimana()"></div>
     <div class="brow no-print">
       <button class="btn bv bsm" onclick="salvaProgrammazione()">💾 Salva tutta la settimana</button>
-      <button class="btn bo bsm" onclick="window.print()">🖨 Stampa</button>
+      <button class="btn bo bsm" onclick="apriAnteprimaTurniAppalto()">📄 Anteprima / PDF</button>
       <button class="btn bo bsm" onclick="aggiungiRigaExtra()">+ Aggiungi persona extra (giorno attivo)</button>
     </div>
     <div id="prog-msg"></div>
@@ -1611,6 +1639,112 @@ async function salvaProgrammazione(){
   const{error}=await sb.from('TurniOrtofruttaPianificati').insert(righe);
   document.getElementById('prog-msg').innerHTML=error?`<div class="alert aerr">Errore: ${error.message}</div>`:`<div class="alert aok">✔ Programmazione salvata (${righe.length} turni su ${dates.length} giorni).</div>`;
 }
+
+function testoPulitoStampa(valore){
+  return String(valore||'').replace(/^[a-z]\s+/i,'').trim();
+}
+function escapeHtmlStampa(valore){
+  return String(valore??'').replace(/[&<>"']/g,c=>({'&':'&amp;','<':'&lt;','>':'&gt;','"':'&quot;',"'":'&#39;'}[c]));
+}
+function classeRepartoStampa(reparto){
+  const n=normalizzaNomePlanner(reparto);
+  if(/orto|frutta/.test(n))return'rep-ortofrutta';
+  if(/carico|bai/.test(n))return'rep-carico';
+  if(/lavaggio/.test(n))return'rep-lavaggio';
+  if(/economia|forno/.test(n))return'rep-economia';
+  if(/vuot/.test(n))return'rep-vuoti';
+  if(/grocery/.test(n))return'rep-grocery';
+  return'rep-altro';
+}
+function colorePdfReparto(reparto){
+  const c=classeRepartoStampa(reparto);
+  return c==='rep-ortofrutta'?[220,252,231]:c==='rep-carico'?[255,237,213]:c==='rep-lavaggio'?[219,234,254]:c==='rep-economia'?[243,232,255]:c==='rep-vuoti'?[254,243,199]:c==='rep-grocery'?[204,251,241]:[243,244,246];
+}
+function datiStampaTurniAppalto(){
+  const settimana=APPALTO_SETTIMANE[APPALTO_LUNEDI];if(!settimana)return null;
+  const persone=new Map(),giorni=[...Array(8)].map((_,i)=>({indice:i,data:addGiorni(APPALTO_LUNEDI,i),etichetta:ETICHETTE_TAB[i]||('Giorno '+(i+1))}));
+  const aggiungiPersona=(id,nome)=>{
+    const nomePulito=String(nome||'').trim();if(!nomePulito)return null;
+    const chiave=id!=null&&id!==''?'id:'+id:'nome:'+normalizzaNomePlanner(nomePulito);
+    if(!persone.has(chiave))persone.set(chiave,{chiave,id:id??null,nome:nomePulito,giorni:[...Array(8)].map(()=>({turni:[],riposo:false,assenza:null}))});
+    return persone.get(chiave);
+  };
+  (settimana.righe||[]).forEach(r=>{
+    if(r.tipo==='non_programmato'||r.virtuale)return;
+    const nome=nomeVisualizzatoRigaAppalto(r),persona=aggiungiPersona(r.id_dipendente,nome);if(!persona)return;
+    const giorno=r.tipo==='riposo'?Number(r.giorno):giornoEffettivoRigaAppalto(r);if(giorno<0||giorno>7)return;
+    const cella=persona.giorni[giorno];
+    if(r.tipo==='riposo'){cella.riposo=true;return;}
+    if(!r.inizio||!r.fine)return;
+    cella.turni.push({inizio:r.inizio,fine:r.fine,reparto:testoPulitoStampa(r.reparto)||'Reparto da definire',attivita:testoPulitoStampa(r.attivita)||''});
+  });
+  DIPENDENTI.forEach(d=>{
+    giorni.forEach((g,i)=>{
+      const assenza=APPALTO_ASSENZE.get(chiaveAssenza(d.ID_Dipendente,g.data));if(!assenza)return;
+      const persona=aggiungiPersona(d.ID_Dipendente,d.Nome);persona.giorni[i].assenza=motivoAssenza(assenza);
+    });
+  });
+  const righe=[...persone.values()].filter(p=>p.giorni.some(g=>g.turni.length||g.riposo||g.assenza)).sort((a,b)=>a.nome.localeCompare(b.nome,'it',{sensitivity:'base'}));
+  righe.forEach(p=>p.giorni.forEach(g=>g.turni.sort((a,b)=>(orarioAMinuti(a.inizio)??0)-(orarioAMinuti(b.inizio)??0))));
+  return{settimana,righe,giorni};
+}
+function testoCellaStampa(cella){
+  if(cella.assenza)return String(cella.assenza).toUpperCase();
+  if(cella.riposo)return'RIPOSO';
+  return cella.turni.map(t=>t.inizio+'–'+t.fine+'\n'+t.reparto+(t.attivita?' – '+t.attivita:'')).join('\n');
+}
+function htmlCellaStampa(cella){
+  if(cella.assenza)return'<td class="cella-stampa-assenza">'+escapeHtmlStampa(cella.assenza)+'</td>';
+  if(cella.riposo)return'<td class="cella-stampa-riposo">RIPOSO</td>';
+  const turni=cella.turni.map(t=>'<div class="turno-stampa '+classeRepartoStampa(t.reparto)+'"><div class="ora">'+escapeHtmlStampa(t.inizio)+'–'+escapeHtmlStampa(t.fine)+'</div><div class="mansione">'+escapeHtmlStampa(t.reparto)+(t.attivita?' – '+escapeHtmlStampa(t.attivita):'')+'</div></div>').join('');
+  return'<td>'+turni+'</td>';
+}
+function apriAnteprimaTurniAppalto(){
+  const dati=datiStampaTurniAppalto();if(!dati){toast('Prima crea o carica una settimana.','warn');return;}
+  if(!dati.righe.length){toast('La settimana non contiene turni, riposi o assenze da stampare.','warn');return;}
+  document.getElementById('stampa-turni-overlay')?.remove();
+  const intestazioni=dati.giorni.map((g,i)=>'<th>'+escapeHtmlStampa(i===7?'Lun +1':g.etichetta.slice(0,3))+'<br>'+fmtDataIt(g.data)+'</th>').join('');
+  const righe=dati.righe.map(p=>'<tr><td>'+escapeHtmlStampa(p.nome)+'</td>'+p.giorni.map(htmlCellaStampa).join('')+'</tr>').join('');
+  const verifica=APPALTO_ASSENZE_VERIFICATE?'Assenze Nexus verificate':'Attenzione: assenze Nexus non verificate in questa sessione';
+  document.body.insertAdjacentHTML('beforeend','<div id="stampa-turni-overlay" class="stampa-turni-overlay" role="dialog" aria-modal="true"><div class="stampa-turni-card"><div class="stampa-turni-toolbar"><div><h2>Anteprima turni settimanali</h2><small>Foglio unico digitale · '+dati.righe.length+' persone · '+escapeHtmlStampa(verifica)+'</small></div><div class="brow"><button class="btn bo" type="button" onclick="chiudiAnteprimaTurniAppalto()">Chiudi</button><button class="btn bv" type="button" onclick="scaricaPdfTurniAppalto()">⬇ Scarica PDF</button></div></div><div class="stampa-turni-scroller"><div class="foglio-turni"><div class="foglio-turni-head"><div><h3>TURNI APPALTO — CASSANO MAGNAGO</h3><p>Settimana dal '+fmtDataIt(APPALTO_LUNEDI)+' al '+fmtDataIt(addGiorni(APPALTO_LUNEDI,7))+'</p></div><p>Generato il '+new Date().toLocaleString('it-IT')+'</p></div><table class="tabella-turni-pdf"><thead><tr><th>PERSONA</th>'+intestazioni+'</tr></thead><tbody>'+righe+'</tbody></table><div class="legenda-turni"><span><i class="rep-ortofrutta"></i>Ortofrutta</span><span><i class="rep-carico"></i>Carico</span><span><i class="rep-lavaggio"></i>Lavaggio</span><span><i class="rep-economia"></i>Economia / Forno</span><span><i class="rep-vuoti"></i>Vuoti</span><span><i class="rep-grocery"></i>Grocery</span><span><i class="cella-stampa-riposo"></i>Riposo</span><span><i class="cella-stampa-assenza"></i>Assenza / ferie</span></div></div></div></div></div>');
+}
+function chiudiAnteprimaTurniAppalto(){document.getElementById('stampa-turni-overlay')?.remove();}
+function scaricaPdfTurniAppalto(){
+  const dati=datiStampaTurniAppalto();if(!dati||!dati.righe.length)return;
+  const jsPDF=window.jspdf?.jsPDF;if(!jsPDF){toast('Il generatore PDF non è ancora disponibile. Ricarica la pagina e riprova.','err');return;}
+  const stimaAltezza=dati.righe.reduce((tot,p)=>{
+    const linee=Math.max(1,...p.giorni.map(g=>g.assenza||g.riposo?1:Math.max(1,g.turni.length*2)));
+    return tot+Math.max(4.5,3+linee*2.25);
+  },0);
+  const altezzaPagina=Math.max(594,Math.min(3000,stimaAltezza+48)),larghezzaPagina=Math.max(841,altezzaPagina*1.42);
+  const doc=new jsPDF({orientation:'landscape',unit:'mm',format:[larghezzaPagina,altezzaPagina],compress:true});
+  doc.setProperties({title:'Turni Appalto Cassano - '+APPALTO_LUNEDI,subject:'Programmazione settimanale del personale',author:'Nexus S.r.l.'});
+  doc.setFont('helvetica','bold');doc.setFontSize(16);doc.setTextColor(19,19,19);doc.text('TURNI APPALTO — CASSANO MAGNAGO',10,13);
+  doc.setFont('helvetica','normal');doc.setFontSize(8);doc.text('Settimana dal '+fmtDataIt(APPALTO_LUNEDI)+' al '+fmtDataIt(addGiorni(APPALTO_LUNEDI,7))+'  ·  '+dati.righe.length+' persone',10,18);
+  const head=[['PERSONA',...dati.giorni.map((g,i)=>(i===7?'LUN +1':g.etichetta.slice(0,3).toUpperCase())+'\n'+fmtDataIt(g.data))]];
+  const body=dati.righe.map(p=>[p.nome,...p.giorni.map(testoCellaStampa)]);
+  const area=larghezzaPagina-20,larghezzaNome=area*.15,larghezzaGiorno=(area-larghezzaNome)/8;
+  doc.autoTable({
+    head,body,startY:23,margin:{left:10,right:10,bottom:18},theme:'grid',
+    styles:{font:'helvetica',fontSize:6.2,cellPadding:1.4,valign:'top',lineColor:[174,180,174],lineWidth:.18,overflow:'linebreak',textColor:[19,19,19]},
+    headStyles:{fillColor:[19,19,19],textColor:[255,255,255],fontStyle:'bold',halign:'center',valign:'middle',fontSize:6.6},
+    columnStyles:{0:{cellWidth:larghezzaNome,fontStyle:'bold',fillColor:[242,243,240]}},
+    didParseCell:data=>{
+      if(data.section!=='body'||data.column.index===0)return;
+      const cella=dati.righe[data.row.index].giorni[data.column.index-1];
+      if(cella.assenza){data.cell.styles.fillColor=[254,226,226];data.cell.styles.textColor=[153,27,27];data.cell.styles.fontStyle='bold';data.cell.styles.halign='center';}
+      else if(cella.riposo){data.cell.styles.fillColor=[219,234,254];data.cell.styles.textColor=[30,58,138];data.cell.styles.fontStyle='bold';data.cell.styles.halign='center';}
+      else if(cella.turni.length)data.cell.styles.fillColor=colorePdfReparto(cella.turni[0].reparto);
+    },
+    pageBreak:'avoid',rowPageBreak:'avoid'
+  });
+  const y=Math.min(altezzaPagina-8,(doc.lastAutoTable?.finalY||23)+7);doc.setFontSize(6.5);doc.setTextColor(70,70,70);
+  doc.text('Colori reparti: Ortofrutta verde · Carico arancio · Lavaggio blu · Economia/Forno viola · Vuoti giallo · Grocery turchese · Riposo blu · Assenza/Ferie rosso',10,y);
+  doc.text('Generato il '+new Date().toLocaleString('it-IT')+(APPALTO_ASSENZE_VERIFICATE?' · Assenze Nexus verificate':' · Assenze Nexus non verificate'),10,y+4);
+  if(doc.getNumberOfPages()>1){toast('Il prospetto è risultato troppo esteso per un solo foglio. Riduci le righe e riprova.','warn');return;}
+  doc.save('Turni_Cassano_'+APPALTO_LUNEDI+'.pdf');
+}
+
 avviaApp();
 </script>
 </body>
