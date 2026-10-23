@@ -333,7 +333,19 @@ function normalizzaConfigAppalto(configurazione){
   cfg.fabbisogni={};
   ['ceste','forno','vuoti','grocery'].forEach(rep=>{
     const giorni=Array.isArray(fabOrigine[rep])?fabOrigine[rep]:[];
-    cfg.fabbisogni[rep]=GIORNI.map((_,i)=>Array.isArray(giorni[i])?giorni[i]:structuredClone(base.fabbisogni[rep][i]||[]));
+    cfg.fabbisogni[rep]=GIORNI.map((_,i)=>{
+      const righe=Array.isArray(giorni[i])?giorni[i]:structuredClone(base.fabbisogni[rep][i]||[]);
+      return righe.slice(0,200).map(r=>{
+        const validaOra=v=>/^([01]\d|2[0-3]):(?:00|30)$/.test(String(v||''))?String(v):null;
+        return{
+          ...r,
+          attivita:String(r?.attivita||''),
+          inizio:validaOra(r?.inizio)||'06:00',
+          fine:validaOra(r?.fine)||'12:30',
+          persone:Math.max(1,Math.min(100,Number(r?.persone)||1))
+        };
+      });
+    });
   });
   return cfg;
 }
@@ -392,7 +404,9 @@ function grigliaMezzOreHtml(rep){
   const intervalli=righe.map(intervalloFabbisogno);
   const da=Math.floor(Math.min(...intervalli.map(r=>r.inizio))/30)*30;
   const a=Math.ceil(Math.max(...intervalli.map(r=>r.fine))/30)*30;
-  const slot=[];for(let m=da;m<a;m+=30)slot.push(m);
+  // Una fascia valida non può produrre più di 24 ore di anteprima.
+  // Il limite evita che un valore locale/legacy anomalo blocchi il browser.
+  const limite=Math.min(a,da+1440),slot=[];for(let m=da;m<limite&&slot.length<48;m+=30)slot.push(m);
   const att=[...new Set(righe.map(r=>r.attivita))];
   return `<div class="tw"><table><thead><tr><th>Attività</th>${slot.map(m=>`<th>${oraMinuti(m)}</th>`).join('')}</tr></thead><tbody>${att.map(nome=>`<tr><td><b>${nome}</b></td>${slot.map(m=>{const n=righe.filter(r=>{const x=intervalloFabbisogno(r);return r.attivita===nome&&x.inizio<=m&&x.fine>m;}).reduce((s,r)=>s+Number(r.persone||0),0);return `<td style="text-align:center;background:${n?'#d3f0e3':'#fff'}">${n||'—'}</td>`;}).join('')}</tr>`).join('')}</tbody></table></div>`;
 }
@@ -445,11 +459,28 @@ async function avviaSessione(sessione){
   if(!projectIdValido()){mostraLogin('Project ID Supabase non valido.');return;}
   if(!responsabileAutorizzato(sessione)){mostraLogin('Account non autorizzato al programmatore Cassano.');return;}
   SESSIONE_CASSANO=sessione;document.getElementById('auth-screen').style.display='none';document.getElementById('app').style.display='block';statoSync(sessione.user.email||'Responsabile autorizzato');
-  const cataloghi=await Promise.allSettled([caricaDipendenti(),caricaCatalogoAttivita()]);
-  const erroreCataloghi=cataloghi.find(r=>r.status==='rejected');
-  await caricaStatoCassanoSupabase();
+  // La navigazione non deve dipendere dai cataloghi: la pagina si apre subito,
+  // mentre cataloghi e stato Cassano vengono sincronizzati in background.
   showTab('config');
-  if(erroreCataloghi){console.error('Errore caricamento cataloghi Cassano:',erroreCataloghi.reason);toast('Alcuni cataloghi non sono stati caricati completamente; ricarica la pagina.','warn');}
+  const inizializzazione=Promise.allSettled([
+    caricaDipendenti(),
+    caricaCatalogoAttivita(),
+    caricaStatoCassanoSupabase()
+  ]);
+  const esito=await Promise.race([
+    inizializzazione,
+    new Promise(resolve=>setTimeout(()=>resolve(null),8000))
+  ]);
+  if(esito===null){
+    console.warn('Inizializzazione Cassano oltre 8 secondi: navigazione mantenuta disponibile.');
+    statoSync('Connesso a Supabase · sincronizzazione in corso');
+    return;
+  }
+  const errore=esito.find(r=>r.status==='rejected');
+  if(errore){console.error('Errore inizializzazione Cassano:',errore.reason);toast('Una parte dei dati non è stata caricata; le pagine restano comunque disponibili.','warn');}
+  // Aggiorna la schermata corrente con cataloghi/configurazione appena caricati.
+  if(document.getElementById('nav-config')?.classList.contains('on'))showTab('config');
+  else if(document.getElementById('nav-appalto')?.classList.contains('on'))showTab('appalto');
 }
 async function avviaApp(){
   if(!projectIdValido()){mostraLogin('Project ID Supabase non valido.');return;}
