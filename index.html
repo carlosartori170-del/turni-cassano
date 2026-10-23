@@ -1712,24 +1712,26 @@ function chiudiAnteprimaTurniAppalto(){document.getElementById('stampa-turni-ove
 function scaricaPdfTurniAppalto(){
   const dati=datiStampaTurniAppalto();if(!dati||!dati.righe.length)return;
   const jsPDF=window.jspdf?.jsPDF;if(!jsPDF){toast('Il generatore PDF non è ancora disponibile. Ricarica la pagina e riprova.','err');return;}
-  const stimaAltezza=dati.righe.reduce((tot,p)=>{
-    const linee=Math.max(1,...p.giorni.map(g=>g.assenza||g.riposo?1:Math.max(1,g.turni.length*2)));
-    return tot+Math.max(4.5,3+linee*2.25);
-  },0);
   const head=[['PERSONA',...dati.giorni.map((g,i)=>(i===7?'LUN +1':g.etichetta.slice(0,3).toUpperCase())+'\n'+fmtDataIt(g.data))]];
   const body=dati.righe.map(p=>[p.nome,...p.giorni.map(testoCellaStampa)]);
-  const creaDocumento=(altezzaPagina,tentativo)=>{
-    const larghezzaPagina=Math.max(841,Math.min(5000,altezzaPagina*1.42));
-    const doc=new jsPDF({orientation:'landscape',unit:'mm',format:[larghezzaPagina,altezzaPagina],compress:true});
+  const larghezzaPagina=841,margine=8,area=larghezzaPagina-margine*2,larghezzaNome=118,larghezzaGiorno=(area-larghezzaNome)/8;
+  const stiliColonne={0:{cellWidth:larghezzaNome,fontStyle:'bold',fillColor:[242,243,240]}};
+  for(let i=1;i<=8;i++)stiliColonne[i]={cellWidth:larghezzaGiorno};
+
+  const creaDocumento=altezzaPagina=>{
+    const orientamento=larghezzaPagina>=altezzaPagina?'landscape':'portrait';
+    const doc=new jsPDF({orientation:orientamento,unit:'mm',format:[larghezzaPagina,altezzaPagina],compress:true});
     doc.setProperties({title:'Turni Appalto Cassano - '+APPALTO_LUNEDI,subject:'Programmazione settimanale del personale',author:'Nexus S.r.l.'});
-    doc.setFont('helvetica','bold');doc.setFontSize(16);doc.setTextColor(19,19,19);doc.text('TURNI APPALTO — CASSANO MAGNAGO',10,13);
-    doc.setFont('helvetica','normal');doc.setFontSize(8);doc.text('Settimana dal '+fmtDataIt(APPALTO_LUNEDI)+' al '+fmtDataIt(addGiorni(APPALTO_LUNEDI,7))+'  ·  '+dati.righe.length+' persone',10,18);
-    const area=larghezzaPagina-20,larghezzaNome=area*.15,fontCorpo=Math.max(4.8,6.2-tentativo*.18);
+    doc.setFillColor(19,19,19);doc.rect(margine,7,area,17,'F');
+    doc.setFont('helvetica','bold');doc.setFontSize(16);doc.setTextColor(255,255,255);doc.text('TURNI APPALTO - CASSANO MAGNAGO',margine+5,14);
+    doc.setFont('helvetica','normal');doc.setFontSize(8);doc.text('Settimana dal '+fmtDataIt(APPALTO_LUNEDI)+' al '+fmtDataIt(addGiorni(APPALTO_LUNEDI,7))+'  -  '+dati.righe.length+' persone',margine+5,20);
     doc.autoTable({
-      head,body,startY:23,margin:{left:10,right:10,bottom:18},theme:'grid',
-      styles:{font:'helvetica',fontSize:fontCorpo,cellPadding:1.35,valign:'top',lineColor:[174,180,174],lineWidth:.18,overflow:'linebreak',textColor:[19,19,19]},
-      headStyles:{fillColor:[19,19,19],textColor:[255,255,255],fontStyle:'bold',halign:'center',valign:'middle',fontSize:Math.max(5.2,6.6-tentativo*.18)},
-      columnStyles:{0:{cellWidth:larghezzaNome,fontStyle:'bold',fillColor:[242,243,240]}},
+      head,body,startY:27,margin:{left:margine,right:margine,bottom:16},theme:'grid',
+      tableWidth:area,
+      styles:{font:'helvetica',fontSize:7.4,cellPadding:1.45,valign:'middle',lineColor:[174,180,174],lineWidth:.16,overflow:'linebreak',textColor:[19,19,19],minCellHeight:5.2},
+      headStyles:{fillColor:[27,94,53],textColor:[255,255,255],fontStyle:'bold',halign:'center',valign:'middle',fontSize:7.5,cellPadding:1.7},
+      columnStyles:stiliColonne,
+      alternateRowStyles:{fillColor:[249,250,248]},
       didParseCell:data=>{
         if(data.section!=='body'||data.column.index===0)return;
         const cella=dati.righe[data.row.index].giorni[data.column.index-1];
@@ -1739,26 +1741,29 @@ function scaricaPdfTurniAppalto(){
       },
       pageBreak:'auto',rowPageBreak:'avoid'
     });
-    if(doc.getNumberOfPages()===1){
-      const y=Math.min(altezzaPagina-8,(doc.lastAutoTable?.finalY||23)+7);doc.setFontSize(6.5);doc.setTextColor(70,70,70);
-      doc.text('Colori reparti: Ortofrutta verde · Carico arancio · Lavaggio blu · Economia/Forno viola · Vuoti giallo · Grocery turchese · Riposo blu · Assenza/Ferie rosso',10,y);
-      doc.text('Generato il '+new Date().toLocaleString('it-IT')+(APPALTO_ASSENZE_VERIFICATE?' · Assenze Nexus verificate':' · Assenze Nexus non verificate'),10,y+4);
-    }
     return doc;
   };
-  let altezzaPagina=Math.max(594,stimaAltezza+85),doc=null;
-  for(let tentativo=0;tentativo<7;tentativo++){
-    altezzaPagina=Math.min(4800,altezzaPagina);
-    doc=creaDocumento(altezzaPagina,tentativo);
-    if(doc.getNumberOfPages()===1)break;
-    const pagine=doc.getNumberOfPages();
-    altezzaPagina=Math.min(4800,altezzaPagina*Math.max(1.35,pagine*1.12));
+
+  // Prima misuro la tabella su un foglio alto ma con larghezza già definitiva.
+  const misura=creaDocumento(5000);
+  const altezzaMisurata=misura.getNumberOfPages()===1?(misura.lastAutoTable?.finalY||594)+18:5000;
+  let altezzaFinale=Math.max(594,Math.min(5000,Math.ceil(altezzaMisurata)));
+  let doc=creaDocumento(altezzaFinale);
+
+  // Margine di sicurezza per differenze di impaginazione del browser.
+  if(doc.getNumberOfPages()>1&&altezzaFinale<5000){
+    altezzaFinale=Math.min(5000,Math.ceil(altezzaFinale*doc.getNumberOfPages()*1.08));
+    doc=creaDocumento(altezzaFinale);
   }
-  if(doc.getNumberOfPages()>1){
-    // Ultima garanzia: foglio massimo e carattere più compatto, sempre senza eliminare persone.
-    doc=creaDocumento(5000,9);
+
+  if(doc.getNumberOfPages()===1){
+    const y=Math.min(altezzaFinale-7,(doc.lastAutoTable?.finalY||27)+6);
+    doc.setFont('helvetica','normal');doc.setFontSize(6.8);doc.setTextColor(70,70,70);
+    doc.text('Colori: Ortofrutta verde - Carico arancio - Lavaggio blu - Economia/Forno viola - Vuoti giallo - Grocery turchese - Riposo blu - Assenza/Ferie rosso',margine,y);
+    doc.text('Generato il '+new Date().toLocaleString('it-IT')+(APPALTO_ASSENZE_VERIFICATE?' - Assenze Nexus verificate':' - Assenze Nexus non verificate'),margine,y+4);
+  }else{
+    toast('Il PDF è completo ma, per il numero di righe, è stato distribuito su più pagine.','warn');
   }
-  if(doc.getNumberOfPages()>1)toast('Il PDF è completo ma, per il numero di righe, è stato distribuito su più pagine.','warn');
   doc.save('Turni_Cassano_'+APPALTO_LUNEDI+'.pdf');
 }
 
