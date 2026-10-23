@@ -1685,7 +1685,6 @@ function datiStampaTurniAppalto(){
     });
   });
   const righe=[...persone.values()].filter(p=>p.giorni.some(g=>g.turni.length||g.riposo||g.assenza)).sort((a,b)=>a.nome.localeCompare(b.nome,'it',{sensitivity:'base'}));
-  righe.forEach(p=>p.giorni.forEach(g=>g.turni.sort((a,b)=>(orarioAMinuti(a.inizio)??0)-(orarioAMinuti(b.inizio)??0))));
   return{settimana,righe,giorni};
 }
 function testoCellaStampa(cella){
