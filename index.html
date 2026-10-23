@@ -1672,7 +1672,7 @@ function datiStampaTurniAppalto(){
   (settimana.righe||[]).forEach(r=>{
     if(r.tipo==='non_programmato'||r.virtuale)return;
     const nome=nomeVisualizzatoRigaAppalto(r),persona=aggiungiPersona(r.id_dipendente,nome);if(!persona)return;
-    const giorno=r.tipo==='riposo'?Number(r.giorno):giornoEffettivoRigaAppalto(r);if(giorno<0||giorno>7)return;
+    // Nel prospetto le fasce collegate restano nella giornata del turno principale:\n    // es. 23:00–04:00 e 04:00–06:00 compaiono entrambe nella stessa cella.\n    const giorno=Number(r.giorno);if(giorno<0||giorno>7)return;
     const cella=persona.giorni[giorno];
     if(r.tipo==='riposo'){cella.riposo=true;return;}
     if(!r.inizio||!r.fine)return;
