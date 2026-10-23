@@ -1714,7 +1714,7 @@ function scaricaPdfTurniAppalto(){
   const jsPDF=window.jspdf?.jsPDF;if(!jsPDF){toast('Il generatore PDF non è ancora disponibile. Ricarica la pagina e riprova.','err');return;}
   const head=[['PERSONA',...dati.giorni.map((g,i)=>(i===7?'LUN +1':g.etichetta.slice(0,3).toUpperCase())+'\n'+fmtDataIt(g.data))]];
   const body=dati.righe.map(p=>[p.nome,...p.giorni.map(testoCellaStampa)]);
-  const larghezzaPagina=841,margine=8,area=larghezzaPagina-margine*2,larghezzaNome=118,larghezzaGiorno=(area-larghezzaNome)/8;
+  const larghezzaPagina=480,margine=6,area=larghezzaPagina-margine*2,larghezzaNome=72,larghezzaGiorno=(area-larghezzaNome)/8;
   const stiliColonne={0:{cellWidth:larghezzaNome,fontStyle:'bold',fillColor:[242,243,240]}};
   for(let i=1;i<=8;i++)stiliColonne[i]={cellWidth:larghezzaGiorno};
 
