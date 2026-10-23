@@ -322,13 +322,25 @@ let ATTIVITA_TUTTE=[]; // catalogo attività Cassano, con ID_Reparto (sola lettu
 
 let DIPENDENTI=[]; // cache dipendenti attivi Cassano
 
+function normalizzaConfigAppalto(configurazione){
+  const base=structuredClone(DEFAULT_CONFIG_APPALTO),origine=configurazione&&typeof configurazione==='object'?configurazione:{};
+  const cfg={...base,...origine};
+  ['carico','ricevimento'].forEach(nome=>{
+    const valori=Array.isArray(origine[nome])?origine[nome]:[];
+    cfg[nome]=GIORNI.map((_,i)=>valori[i]??base[nome][i]);
+  });
+  const fabOrigine=origine.fabbisogni&&typeof origine.fabbisogni==='object'?origine.fabbisogni:{};
+  cfg.fabbisogni={};
+  ['ceste','forno','vuoti','grocery'].forEach(rep=>{
+    const giorni=Array.isArray(fabOrigine[rep])?fabOrigine[rep]:[];
+    cfg.fabbisogni[rep]=GIORNI.map((_,i)=>Array.isArray(giorni[i])?giorni[i]:structuredClone(base.fabbisogni[rep][i]||[]));
+  });
+  return cfg;
+}
 function caricaConfigAppaltoLocale(){
   try{
-    const salvata=JSON.parse(localStorage.getItem(CONFIG_APPALTO_KEY)||'{}'),cfg={...structuredClone(DEFAULT_CONFIG_APPALTO),...salvata};
-    cfg.fabbisogni={...structuredClone(DEFAULT_CONFIG_APPALTO.fabbisogni),...(salvata.fabbisogni||{})};
-    if(!salvata.fabbisogni?.ceste)cfg.fabbisogni.ceste=(cfg.ceste||DEFAULT_CONFIG_APPALTO.ceste).map(g=>g.map(p=>({attivita:'Lavaggio ceste',inizio:p[0],fine:p[1],persone:1})));
-    if(!salvata.fabbisogni?.forno)cfg.fabbisogni.forno=(cfg.forno||DEFAULT_CONFIG_APPALTO.forno).map(g=>g.filter(p=>Number(p[0])>0).map(p=>({attivita:'Lavaggio forno',inizio:p[1],fine:p[2],persone:Number(p[0])})));
-    return cfg;
+    const salvata=JSON.parse(localStorage.getItem(CONFIG_APPALTO_KEY)||'{}');
+    return normalizzaConfigAppalto(salvata);
   }
   catch(_){return structuredClone(DEFAULT_CONFIG_APPALTO);}
 }
@@ -433,9 +445,11 @@ async function avviaSessione(sessione){
   if(!projectIdValido()){mostraLogin('Project ID Supabase non valido.');return;}
   if(!responsabileAutorizzato(sessione)){mostraLogin('Account non autorizzato al programmatore Cassano.');return;}
   SESSIONE_CASSANO=sessione;document.getElementById('auth-screen').style.display='none';document.getElementById('app').style.display='block';statoSync(sessione.user.email||'Responsabile autorizzato');
-  await Promise.all([caricaDipendenti(),caricaCatalogoAttivita()]);
+  const cataloghi=await Promise.allSettled([caricaDipendenti(),caricaCatalogoAttivita()]);
+  const erroreCataloghi=cataloghi.find(r=>r.status==='rejected');
   await caricaStatoCassanoSupabase();
   showTab('config');
+  if(erroreCataloghi){console.error('Errore caricamento cataloghi Cassano:',erroreCataloghi.reason);toast('Alcuni cataloghi non sono stati caricati completamente; ricarica la pagina.','warn');}
 }
 async function avviaApp(){
   if(!projectIdValido()){mostraLogin('Project ID Supabase non valido.');return;}
@@ -451,16 +465,16 @@ async function caricaDipendenti(){
     const mag=d.Magazzini;
     if(Array.isArray(mag))return mag.map(Number).includes(ID_MAGAZZINO_CASSANO);
     return false;
-  }).sort((a,b)=>(a.Nome||'').localeCompare(b.Nome||''));
+  }).sort((a,b)=>String(a.Nome||'').localeCompare(String(b.Nome||'')));
 }
 
 async function caricaCatalogoAttivita(){
   const{data:rep,error:er}=await sb.from('Reparti').select('*').eq('ID_Magazzino',ID_MAGAZZINO_CASSANO);
   if(er){toast('Errore caricando reparti: '+er.message,'err');return;}
-  REPARTI=(rep||[]).sort((a,b)=>(a.NomeReparto||'').localeCompare(b.NomeReparto||''));
+  REPARTI=(rep||[]).sort((a,b)=>String(a.NomeReparto||'').localeCompare(String(b.NomeReparto||'')));
   const{data:att,error:ea}=await sb.from('Attivita').select('*').eq('ID_Magazzino',ID_MAGAZZINO_CASSANO);
   if(ea){toast('Errore caricando attività: '+ea.message,'err');return;}
-  ATTIVITA_TUTTE=(att||[]).sort((a,b)=>(a.NomeAttivita||'').localeCompare(b.NomeAttivita||''));
+  ATTIVITA_TUTTE=(att||[]).sort((a,b)=>String(a.NomeAttivita||'').localeCompare(String(b.NomeAttivita||'')));
 
   // Cerco l'attività "Navetta" nel reparto Ortofrutta per nome (non ho un ID fisso come per le altre tre)
   const navetta=ATTIVITA_TUTTE.find(a=>Number(a.ID_Reparto)===ID_REPARTO_ORTOFRUTTA&&/navett/i.test(String(a.NomeAttivita||a.Nome||a.Descrizione||'')));
@@ -471,10 +485,18 @@ async function caricaCatalogoAttivita(){
 function showTab(id){
   document.querySelectorAll('nav button').forEach(b=>b.classList.remove('on'));
   document.getElementById('nav-'+id).classList.add('on');
-  if(id==='config')renderConfigTab();
-  else if(id==='previsione')renderPrevisioneTab();
-  else if(id==='appalto')renderProgrammazioneAppaltoTab();
-  else if(id==='controllo')renderControlloTab();
+  if(id==='config')eseguiSchermata('Configurazione',renderConfigTab);
+  else if(id==='previsione')eseguiSchermata('Previsione Ortofrutta',renderPrevisioneTab);
+  else if(id==='appalto')eseguiSchermata('Programmazione',renderProgrammazioneAppaltoTab);
+  else if(id==='controllo')eseguiSchermata('Colli reali e controllo',renderControlloTab);
+}
+function eseguiSchermata(nome,funzione){
+  try{const risultato=funzione();if(risultato&&typeof risultato.catch==='function')risultato.catch(e=>mostraErroreSchermata(nome,e));}
+  catch(e){mostraErroreSchermata(nome,e);}
+}
+function mostraErroreSchermata(nome,error){
+  console.error('Errore schermata '+nome+':',error);
+  const mc=document.getElementById('mc');if(mc)mc.innerHTML='<div class="alert aerr"><b>'+nome+' non caricata.</b><br>'+testoHtmlAppalto(error&&error.message?error.message:'Errore non identificato')+'<br><small>Ricarica la pagina; se il problema continua comunica questo messaggio.</small></div>';
 }
 
 // Utility date — lunedì della settimana di una data qualsiasi
@@ -764,7 +786,7 @@ async function caricaStatoCassanoSupabase(){
   ]);
   const errore=cfg.error||map.error||settimane.error;
   if(errore){statoSync('Errore di caricamento');toast('Dati Cassano non caricati: '+errore.message,'err');return;}
-  if(cfg.data?.Dati){CONFIG_APPALTO={...structuredClone(DEFAULT_CONFIG_APPALTO),...cfg.data.Dati};localStorage.setItem(CONFIG_APPALTO_KEY,JSON.stringify(CONFIG_APPALTO));}
+  if(cfg.data?.Dati){CONFIG_APPALTO=normalizzaConfigAppalto(cfg.data.Dati);localStorage.setItem(CONFIG_APPALTO_KEY,JSON.stringify(CONFIG_APPALTO));}
   if((map.data||[]).length){
     APPALTO_MAPPING={reparti:{},attivita:{}};
     map.data.forEach(m=>{if(m.Tipo==='reparto')APPALTO_MAPPING.reparti[m.ChiaveOrigine]=m.ID_Reparto;else if(m.Tipo==='attivita')APPALTO_MAPPING.attivita[m.ChiaveOrigine]=m.ID_Attivita;});
@@ -859,7 +881,7 @@ function renderProgrammazioneAppaltoTab(){
     <div class="g2 no-print" style="max-width:520px;"><div class="fg"><label>Lunedì della settimana</label><input type="date" id="appalto-lun" value="${APPALTO_LUNEDI}" onchange="caricaSettimanaAppalto(this.value)"></div><div class="fg"><label>Reparto</label><select id="appalto-rep" onchange="APPALTO_REPARTO=this.value;renderCorpoAppalto()"></select></div></div>
     <div class="brow no-print"><button class="btn bv bsm" onclick="salvaSettimanaSupabase()">💾 Salva settimana</button><button class="btn bp bsm" onclick="creaDaSettimanaPrecedente()">↪ Crea dalla settimana precedente</button><button class="btn bo bsm" onclick="aggiungiFasciaAppalto()">＋ Aggiungi fascia</button><button id="appalto-seleziona-replica" class="btn bo bsm" onclick="toggleSelezioneReplica()">☑ Seleziona turni</button><button id="appalto-seleziona-filtrati" class="btn bo bsm" style="display:none" onclick="toggleReplicaFiltrati()">☑ Seleziona tutti i filtrati</button><button id="appalto-conferma-replica" class="btn bv bsm" style="display:none" onclick="apriReplicaSelezionati()">↻ Replica selezionati (0)</button><button class="btn bo bsm" onclick="ordinaNominativiAppalto()">A–Z Riordina nominativi</button><button class="btn bo bsm" onclick="controllaAssenzeAppalto()">🔎 Controlla assenze Nexus</button><button class="btn bo bsm" onclick="APPALTO_SOLO_ASSENTI=!APPALTO_SOLO_ASSENTI;renderCorpoAppalto()">Solo da sostituire</button><button class="btn bo bsm" onclick="APPALTO_VISTA_PERSONE=!APPALTO_VISTA_PERSONE;renderCorpoAppalto()">Vista persone/reparto</button><button class="btn bo bsm" onclick="apriAnteprimaTurniAppalto()">📄 Anteprima / PDF</button></div>
     <div id="appalto-msg"></div><div id="appalto-tabs"></div><div id="appalto-of"></div><div id="appalto-controlli"></div><div id="appalto-filtri"></div><div id="appalto-personale"></div><div id="appalto-body"></div></div>`;
-  caricaSettimanaAppalto(APPALTO_LUNEDI);
+  caricaSettimanaAppalto(APPALTO_LUNEDI).catch(e=>mostraErroreSchermata('Programmazione',e));
 }
 async function caricaSettimanaAppalto(lunedi){
   APPALTO_LUNEDI=lunediSettimana(lunedi);APPALTO_GIORNO=0;APPALTO_ASSENZE=new Map();APPALTO_ASSENZE_VERIFICATE=false;APPALTO_MSG='';APPALTO_MODALITA_REPLICA=false;APPALTO_RIGHE_REPLICA.clear();
