@@ -1669,18 +1669,20 @@ function datiStampaTurniAppalto(){
     if(!persone.has(chiave))persone.set(chiave,{chiave,id:id??null,nome:nomePulito,giorni:[...Array(8)].map(()=>({turni:[],riposo:false,assenza:null}))});
     return persone.get(chiave);
   };
-  (settimana.righe||[]).forEach(r=>{
-    if(r.tipo==='non_programmato'||r.virtuale)return;
+  (Array.isArray(settimana.righe)?settimana.righe:[]).forEach(r=>{
+    if(!r||r.tipo==='non_programmato'||r.virtuale)return;
+    const giorno=Number(r.giorno);if(!Number.isInteger(giorno)||giorno<0||giorno>7)return;
     const nome=nomeVisualizzatoRigaAppalto(r),persona=aggiungiPersona(r.id_dipendente,nome);if(!persona)return;
-    // Nel prospetto le fasce collegate restano nella giornata del turno principale:\n    // es. 23:00–04:00 e 04:00–06:00 compaiono entrambe nella stessa cella.\n    const giorno=Number(r.giorno);if(giorno<0||giorno>7)return;
+    // Nel prospetto le fasce collegate restano nella giornata del turno principale:
+    // es. 23:00–04:00 e 04:00–06:00 compaiono entrambe nella stessa cella.
     const cella=persona.giorni[giorno];
     if(r.tipo==='riposo'){cella.riposo=true;return;}
     if(!r.inizio||!r.fine)return;
     cella.turni.push({inizio:r.inizio,fine:r.fine,reparto:testoPulitoStampa(r.reparto)||'Reparto da definire',attivita:testoPulitoStampa(r.attivita)||''});
   });
-  DIPENDENTI.forEach(d=>{
+  (Array.isArray(DIPENDENTI)?DIPENDENTI:[]).forEach(d=>{
     giorni.forEach((g,i)=>{
-      const assenza=APPALTO_ASSENZE.get(chiaveAssenza(d.ID_Dipendente,g.data));if(!assenza)return;
+      const assenza=APPALTO_ASSENZE instanceof Map?APPALTO_ASSENZE.get(chiaveAssenza(d.ID_Dipendente,g.data)):null;if(!assenza)return;
       const persona=aggiungiPersona(d.ID_Dipendente,d.Nome);persona.giorni[i].assenza=motivoAssenza(assenza);
     });
   });
@@ -1699,13 +1701,20 @@ function htmlCellaStampa(cella){
   return'<td>'+turni+'</td>';
 }
 function apriAnteprimaTurniAppalto(){
-  const dati=datiStampaTurniAppalto();if(!dati){toast('Prima crea o carica una settimana.','warn');return;}
-  if(!dati.righe.length){toast('La settimana non contiene turni, riposi o assenze da stampare.','warn');return;}
-  document.getElementById('stampa-turni-overlay')?.remove();
-  const intestazioni=dati.giorni.map((g,i)=>'<th>'+escapeHtmlStampa(i===7?'Lun +1':g.etichetta.slice(0,3))+'<br>'+fmtDataIt(g.data)+'</th>').join('');
-  const righe=dati.righe.map(p=>'<tr><td>'+escapeHtmlStampa(p.nome)+'</td>'+p.giorni.map(htmlCellaStampa).join('')+'</tr>').join('');
-  const verifica=APPALTO_ASSENZE_VERIFICATE?'Assenze Nexus verificate':'Attenzione: assenze Nexus non verificate in questa sessione';
-  document.body.insertAdjacentHTML('beforeend','<div id="stampa-turni-overlay" class="stampa-turni-overlay" role="dialog" aria-modal="true"><div class="stampa-turni-card"><div class="stampa-turni-toolbar"><div><h2>Anteprima turni settimanali</h2><small>Foglio unico digitale · '+dati.righe.length+' persone · '+escapeHtmlStampa(verifica)+'</small></div><div class="brow"><button class="btn bo" type="button" onclick="chiudiAnteprimaTurniAppalto()">Chiudi</button><button class="btn bv" type="button" onclick="scaricaPdfTurniAppalto()">⬇ Scarica PDF</button></div></div><div class="stampa-turni-scroller"><div class="foglio-turni"><div class="foglio-turni-head"><div><h3>TURNI APPALTO — CASSANO MAGNAGO</h3><p>Settimana dal '+fmtDataIt(APPALTO_LUNEDI)+' al '+fmtDataIt(addGiorni(APPALTO_LUNEDI,7))+'</p></div><p>Generato il '+new Date().toLocaleString('it-IT')+'</p></div><table class="tabella-turni-pdf"><thead><tr><th>PERSONA</th>'+intestazioni+'</tr></thead><tbody>'+righe+'</tbody></table><div class="legenda-turni"><span><i class="rep-ortofrutta"></i>Ortofrutta</span><span><i class="rep-carico"></i>Carico</span><span><i class="rep-lavaggio"></i>Lavaggio</span><span><i class="rep-economia"></i>Economia / Forno</span><span><i class="rep-vuoti"></i>Vuoti</span><span><i class="rep-grocery"></i>Grocery</span><span><i class="cella-stampa-riposo"></i>Riposo</span><span><i class="cella-stampa-assenza"></i>Assenza / ferie</span></div></div></div></div></div>');
+  try{
+    const dati=datiStampaTurniAppalto();if(!dati){toast('Prima crea o carica una settimana.','warn');return;}
+    if(!dati.righe.length){toast('La settimana non contiene turni, riposi o assenze da stampare.','warn');return;}
+    const precedente=document.getElementById('stampa-turni-overlay');if(precedente)precedente.remove();
+    const intestazioni=dati.giorni.map((g,i)=>'<th>'+escapeHtmlStampa(i===7?'Lun +1':g.etichetta.slice(0,3))+'<br>'+fmtDataIt(g.data)+'</th>').join('');
+    const righe=dati.righe.map(p=>'<tr><td>'+escapeHtmlStampa(p.nome)+'</td>'+p.giorni.map(htmlCellaStampa).join('')+'</tr>').join('');
+    const verifica=APPALTO_ASSENZE_VERIFICATE?'Assenze Nexus verificate':'Attenzione: assenze Nexus non verificate in questa sessione';
+    const overlay=document.createElement('div');overlay.id='stampa-turni-overlay';overlay.className='stampa-turni-overlay';overlay.setAttribute('role','dialog');overlay.setAttribute('aria-modal','true');
+    overlay.innerHTML='<div class="stampa-turni-card"><div class="stampa-turni-toolbar"><div><h2>Anteprima turni settimanali</h2><small>Foglio unico digitale · '+dati.righe.length+' persone · '+escapeHtmlStampa(verifica)+'</small></div><div class="brow"><button class="btn bo" type="button" onclick="chiudiAnteprimaTurniAppalto()">Chiudi</button><button class="btn bv" type="button" onclick="scaricaPdfTurniAppalto()">⬇ Scarica PDF</button></div></div><div class="stampa-turni-scroller"><div class="foglio-turni"><div class="foglio-turni-head"><div><h3>TURNI APPALTO — CASSANO MAGNAGO</h3><p>Settimana dal '+fmtDataIt(APPALTO_LUNEDI)+' al '+fmtDataIt(addGiorni(APPALTO_LUNEDI,7))+'</p></div><p>Generato il '+new Date().toLocaleString('it-IT')+'</p></div><table class="tabella-turni-pdf"><thead><tr><th>PERSONA</th>'+intestazioni+'</tr></thead><tbody>'+righe+'</tbody></table><div class="legenda-turni"><span><i class="rep-ortofrutta"></i>Ortofrutta</span><span><i class="rep-carico"></i>Carico</span><span><i class="rep-lavaggio"></i>Lavaggio</span><span><i class="rep-economia"></i>Economia / Forno</span><span><i class="rep-vuoti"></i>Vuoti</span><span><i class="rep-grocery"></i>Grocery</span><span><i class="cella-stampa-riposo"></i>Riposo</span><span><i class="cella-stampa-assenza"></i>Assenza / ferie</span></div></div></div></div>';
+    document.body.appendChild(overlay);
+  }catch(error){
+    console.error('Errore apertura anteprima turni:',error);
+    toast('Impossibile aprire l\'anteprima: '+(error&&error.message?error.message:'errore non identificato')+'. Ricarica la pagina e riprova.','err');
+  }
 }
 function chiudiAnteprimaTurniAppalto(){document.getElementById('stampa-turni-overlay')?.remove();}
 function scaricaPdfTurniAppalto(){
@@ -1760,9 +1769,3 @@ function scaricaPdfTurniAppalto(){
   if(doc.getNumberOfPages()>1){toast('Non è stato possibile comporre il foglio unico. Ricarica la pagina e riprova.','err');return;}
   doc.save('Turni_Cassano_'+APPALTO_LUNEDI+'.pdf');
 }
-
-avviaApp();
-</script>
-</body>
-</html>
-
