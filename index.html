@@ -398,6 +398,7 @@ function opzioniAttivita(rep,r){
 }
 function righeFabbisognoHtml(rep){
   const righe=CONFIG_APPALTO.fabbisogni[rep][CFG_GIORNO_FABB]||[];
+  if(rep==='vuoti'||rep==='grocery')righe.sort((a,b)=>nomeCatalogoSenzaPrefisso(a.attivita).localeCompare(nomeCatalogoSenzaPrefisso(b.attivita),'it',{sensitivity:'base'})||minutiOra(a.inizio)-minutiOra(b.inizio)||minutiOra(a.fine)-minutiOra(b.fine));
   return righe.map((r,i)=>`<tr data-fabb-riga data-rep="${rep}">
     <td><select data-campo="attivita" style="padding:5px;border:1px solid var(--bordo);border-radius:5px;">${opzioniAttivita(rep,r)}</select></td>
     <td><input class="cfg-input cfg-time" type="time" data-campo="inizio" value="${r.inizio}"></td>
@@ -413,7 +414,7 @@ function grigliaMezzOreHtml(rep){
   const da=Math.floor(Math.min(...intervalli.map(r=>r.inizio))/30)*30;
   const a=Math.ceil(Math.max(...intervalli.map(r=>r.fine))/30)*30;
   const slot=[];for(let m=da;m<a;m+=30)slot.push(m);
-  const att=[...new Set(righe.map(r=>r.attivita))];
+  const att=[...new Set(righe.map(r=>r.attivita))].sort((a,b)=>nomeCatalogoSenzaPrefisso(a).localeCompare(nomeCatalogoSenzaPrefisso(b),'it',{sensitivity:'base'}));
   return `<div class="tw"><table><thead><tr><th>Attività</th>${slot.map(m=>`<th>${oraMinuti(m)}</th>`).join('')}</tr></thead><tbody>${att.map(nome=>`<tr><td><b>${nome}</b></td>${slot.map(m=>{const n=righe.filter(r=>{const x=intervalloFabbisogno(r);return r.attivita===nome&&x.inizio<=m&&x.fine>m;}).reduce((s,r)=>s+Number(r.persone||0),0);return `<td style="text-align:center;background:${n?'#d3f0e3':'#fff'}">${n||'—'}</td>`;}).join('')}</tr>`).join('')}</tbody></table></div>`;
 }
 function editorRepartoHtml(rep,titolo){return `<div class="card" style="box-shadow:none;margin:10px 0;"><div class="ct">${titolo}</div><div class="tw"><table><thead><tr><th>Attività</th><th>Dalle</th><th>Alle</th><th>Persone contemporanee</th><th>Ore richieste</th><th></th></tr></thead><tbody>${righeFabbisognoHtml(rep)}</tbody></table></div><div class="brow"><button class="btn bo bsm" onclick="aggiungiFascia('${rep}')">＋ Aggiungi fascia</button><button class="btn bo bsm" onclick="aggiornaAnteprimaFabbisogni()">↻ Aggiorna anteprima</button><button class="btn bo bsm" onclick="copiaFabbisognoSettimana('${rep}')">Copia questo giorno su tutta la settimana</button></div><p class="cfg-note" style="margin-top:14px;">Anteprima automatica del fabbisogno ogni 30 minuti</p>${grigliaMezzOreHtml(rep)}</div>`;}
