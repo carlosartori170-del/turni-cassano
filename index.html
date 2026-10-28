@@ -160,6 +160,37 @@ tr:hover td{background:#f4f8f5;}
 .tabella-copertura{min-width:920px;}
 .tabella-copertura .gruppo-colonne{text-align:center;border-left:1px solid var(--bordo);border-right:1px solid var(--bordo);}
 .tabella-copertura .valore-numero{text-align:right;white-space:nowrap;}
+.timeline-vuoti{margin-top:18px;padding-top:16px;border-top:1px solid var(--bordo);}
+.timeline-vuoti-titolo{display:flex;align-items:flex-start;justify-content:space-between;gap:14px;margin-bottom:10px;flex-wrap:wrap;}
+.timeline-vuoti-titolo h4{margin:0;color:var(--p);font-size:.92rem;}
+.timeline-vuoti-titolo p{margin:3px 0 0;color:var(--grigio);font-size:.73rem;line-height:1.35;}
+.timeline-vuoti-legenda{display:flex;align-items:center;gap:12px;flex-wrap:wrap;font-size:.68rem;color:var(--grigio);}
+.timeline-vuoti-legenda span{display:inline-flex;align-items:center;gap:5px;}
+.timeline-vuoti-legenda i{display:inline-block;width:18px;height:9px;border-radius:3px;}
+.timeline-vuoti-legenda .richiesta{background:#f8fafc;border:1.5px dashed #64748b;}
+.timeline-vuoti-legenda .programmato{background:#1d4ed8;}
+.timeline-vuoti-scroll{overflow-x:auto;padding:2px 0 5px;}
+.timeline-vuoti-board{min-width:820px;}
+.timeline-vuoti-asse,.timeline-vuoti-riga{display:grid;grid-template-columns:155px minmax(665px,1fr);}
+.timeline-vuoti-asse-label{padding:5px 10px 5px 0;font-size:.65rem;font-weight:800;text-transform:uppercase;color:var(--grigio);}
+.timeline-vuoti-asse-track{height:34px;position:relative;border-bottom:1px solid #cbd5e1;}
+.timeline-vuoti-tick{position:absolute;top:0;bottom:0;border-left:1px solid #cbd5e1;}
+.timeline-vuoti-tick span{position:absolute;top:2px;left:4px;font-size:.64rem;color:#475569;white-space:nowrap;font-variant-numeric:tabular-nums;}
+.timeline-vuoti-riga{border-bottom:1px solid #e2e8f0;}
+.timeline-vuoti-riga:last-child{border-bottom:none;}
+.timeline-vuoti-attivita{display:flex;align-items:flex-start;gap:7px;padding:10px 10px 8px 0;font-size:.76rem;font-weight:800;line-height:1.2;}
+.timeline-vuoti-attivita i{width:10px;height:10px;border-radius:50%;flex:0 0 auto;margin-top:2px;}
+.timeline-vuoti-attivita small{display:block;color:var(--grigio);font-size:.62rem;font-weight:600;margin-top:3px;}
+.timeline-vuoti-track{position:relative;min-height:46px;background-color:#fbfcfb;background-image:linear-gradient(to right,#e2e8f0 1px,transparent 1px);background-size:calc(100% / var(--timeline-slot-count)) 100%;}
+.timeline-vuoti-fabbisogno{position:absolute;top:4px;bottom:4px;border:1.5px dashed;border-radius:5px;opacity:.48;pointer-events:none;}
+.timeline-vuoti-turno{position:absolute;height:27px;border-radius:5px;color:#fff;padding:4px 7px;box-sizing:border-box;font-size:.66rem;font-weight:800;line-height:1.1;white-space:nowrap;overflow:hidden;text-overflow:ellipsis;box-shadow:0 1px 3px rgba(0,0,0,.2);z-index:2;}
+.timeline-vuoti-turno .orario{font-weight:600;opacity:.9;margin-left:4px;}
+.timeline-vuoti-vuoto{position:absolute;left:8px;top:12px;color:#94a3b8;font-size:.68rem;font-style:italic;}
+@media(max-width:700px){
+  .timeline-vuoti-asse,.timeline-vuoti-riga{grid-template-columns:118px minmax(665px,1fr);}
+  .timeline-vuoti-board{min-width:785px;}
+  .timeline-vuoti-attivita{font-size:.7rem;}
+}
 .filtri-programmazione{margin:14px 0;padding:14px;border:1px solid #d7d8d5;border-left:4px solid var(--p);border-radius:3px;background:#fff;}
 .filtri-programmazione .ct{margin-bottom:10px;padding-bottom:6px;}
 .scelta-assenza{display:flex;align-items:center;gap:6px;flex-wrap:wrap;}
@@ -1189,7 +1220,74 @@ function calcolaCoperturaFasce(rep,righeSettimana){
   const oreRichieste=dettaglio.reduce((s,x)=>s+x.oreNecessarie,0),oreProgrammate=dettaglio.reduce((s,x)=>s+x.oreProgrammate,0),oreMancanti=dettaglio.reduce((s,x)=>s+x.oreMancanti,0),oreAggiunte=dettaglio.reduce((s,x)=>s+x.oreAggiunte,0),oreCoperte=Math.max(0,oreRichieste-oreMancanti);
   return{rep,titolo:CONTROLLO_REPARTI_FASCE[rep],dettaglio,oreRichieste,oreProgrammate,oreCoperte,oreMancanti,oreAggiunte,completo:oreRichieste>0&&oreMancanti<0.01&&oreAggiunte<0.01};
 }
-function htmlCoperturaFasce(esito,aperto){
+function coloreTimelineVuoti(attivita){
+  const nome=normalizzaNomePlanner(attivita);
+  if(/compatt/.test(nome))return'#c2410c';
+  if(/mulet/.test(nome))return'#1d4ed8';
+  if(/navett/.test(nome))return'#0f766e';
+  if(/pane/.test(nome))return'#b45309';
+  if(/polimer/.test(nome))return'#7e22ce';
+  if(/puliz/.test(nome))return'#15803d';
+  if(/stocc/.test(nome))return'#be123c';
+  if(/abbass/.test(nome))return'#475569';
+  const colori=['#0369a1','#a21caf','#047857','#b91c1c','#4f46e5','#a16207'];
+  let hash=0;for(const c of nome)hash=(hash*31+c.charCodeAt(0))>>>0;
+  return colori[hash%colori.length];
+}
+function chiaveAttivitaTimelineVuoti(r){
+  const id=Number(r?.id_attivita)||0;
+  return id?'id-'+id:'nome-'+normalizzaNomePlanner(r?.attivita);
+}
+function renderTimelineVuoti(righeSettimana){
+  normalizzaFabbisogniCatalogo();
+  const fabbisogni=(CONFIG_APPALTO.fabbisogni?.vuoti?.[APPALTO_GIORNO]||[]).filter(r=>r.inizio&&r.fine);
+  const turni=righeValideCopertura(righeSettimana)
+    .filter(r=>Number(r.giorno)===APPALTO_GIORNO&&chiaveRepartoControllo(r)==='vuoti'&&r.tipo!=='riposo')
+    .map(r=>({...r,...intervalloProgrammatoControllo(r)}));
+  const gruppi=new Map();
+  const gruppoPer=r=>{
+    const chiave=chiaveAttivitaTimelineVuoti(r);if(!chiave||chiave==='nome-')return null;
+    if(!gruppi.has(chiave))gruppi.set(chiave,{chiave,attivita:r.attivita||'Attività da collegare',fabbisogni:[],turni:[]});
+    return gruppi.get(chiave);
+  };
+  fabbisogni.forEach(r=>{const g=gruppoPer(r);if(g)g.fabbisogni.push({...r,...intervalloFabbisogno(r)});});
+  turni.forEach(r=>{const g=gruppoPer(r);if(g){if(!g.attivita||/da collegare/i.test(g.attivita))g.attivita=r.attivita;g.turni.push(r);}});
+  const tuttiIntervalli=[...fabbisogni.map(intervalloFabbisogno),...turni.map(r=>({inizio:r.inizio,fine:r.fine}))];
+  if(!gruppi.size||!tuttiIntervalli.length)return'<div class="timeline-vuoti"><div class="empty">Nessuna fascia Vuoti configurata o programmata per questa giornata.</div></div>';
+  let inizio=Math.floor(Math.min(...tuttiIntervalli.map(x=>x.inizio))/60)*60;
+  let fine=Math.ceil(Math.max(...tuttiIntervalli.map(x=>x.fine))/60)*60;
+  if(fine<=inizio)fine=inizio+60;
+  const durata=fine-inizio,slot=Math.max(1,Math.ceil(durata/30));
+  const percentuale=m=>Math.max(0,Math.min(100,(m-inizio)/durata*100));
+  const larghezza=Math.max(820,Math.ceil(durata/60)*68);
+  const ticks=[];for(let m=inizio;m<=fine;m+=60)ticks.push(`<div class="timeline-vuoti-tick" style="left:${percentuale(m)}%"><span>${oraMinuti(m)}</span></div>`);
+  const ordinati=[...gruppi.values()].sort((a,b)=>{
+    const primo=x=>Math.min(...[...x.fabbisogni,...x.turni].map(r=>r.inizio));
+    return primo(a)-primo(b)||String(a.attivita).localeCompare(String(b.attivita),'it',{sensitivity:'base'});
+  });
+  const righe=ordinati.map(g=>{
+    const colore=coloreTimelineVuoti(g.attivita),corsie=[];
+    const assegnati=g.turni.slice().sort((a,b)=>a.inizio-b.inizio||a.fine-b.fine).map(r=>{
+      let corsia=corsie.findIndex(fineCorsia=>fineCorsia<=r.inizio);
+      if(corsia<0){corsia=corsie.length;corsie.push(r.fine);}else corsie[corsia]=r.fine;
+      return{r,corsia};
+    });
+    const altezza=Math.max(46,assegnati.length?(corsie.length*32+8):46);
+    const richieste=g.fabbisogni.map(f=>{
+      const left=percentuale(f.inizio),width=Math.max(.3,percentuale(f.fine)-left);
+      return `<div class="timeline-vuoti-fabbisogno" title="Fabbisogno ${testoHtmlAppalto(oraMinuti(f.inizio))}-${testoHtmlAppalto(oraMinuti(f.fine))} · ${Number(f.persone)||0} persone" style="left:${left}%;width:${width}%;border-color:${colore};background:${colore}22"></div>`;
+    }).join('');
+    const barre=assegnati.map(({r,corsia})=>{
+      const left=percentuale(r.inizio),width=Math.max(.8,percentuale(r.fine)-left),nome=testoHtmlAppalto(nomeVisualizzatoRigaAppalto(r)||'Da assegnare');
+      const orario=testoHtmlAppalto(oraMinuti(r.inizio))+'-'+testoHtmlAppalto(oraMinuti(r.fine));
+      return `<div class="timeline-vuoti-turno" title="${nome} · ${orario}" style="left:${left}%;width:${width}%;top:${5+corsia*32}px;background:${colore}">${nome}<span class="orario">${orario}</span></div>`;
+    }).join('');
+    const vuoto=assegnati.length?'':'<div class="timeline-vuoti-vuoto">Nessun turno programmato</div>';
+    return `<div class="timeline-vuoti-riga"><div class="timeline-vuoti-attivita"><i style="background:${colore}"></i><div>${testoHtmlAppalto(g.attivita)}<small>${g.turni.length} ${g.turni.length===1?'turno':'turni'} programmati</small></div></div><div class="timeline-vuoti-track" style="height:${altezza}px;--timeline-slot-count:${slot}">${richieste}${barre}${vuoto}</div></div>`;
+  }).join('');
+  return `<div class="timeline-vuoti"><div class="timeline-vuoti-titolo"><div><h4>Copertura temporale delle attività Vuoti</h4><p>Le fasce tratteggiate mostrano il fabbisogno configurato. I turni sovrapposti compaiono su livelli separati.</p></div><div class="timeline-vuoti-legenda"><span><i class="richiesta"></i>Fabbisogno</span><span><i class="programmato"></i>Turno programmato</span></div></div><div class="timeline-vuoti-scroll"><div class="timeline-vuoti-board" style="width:${larghezza}px"><div class="timeline-vuoti-asse"><div class="timeline-vuoti-asse-label">Attività</div><div class="timeline-vuoti-asse-track">${ticks.join('')}</div></div>${righe}</div></div></div>`;
+}
+function htmlCoperturaFasce(esito,aperto,righeSettimana){
   const righe=esito.dettaglio.map(x=>{
     const programmate=x.presentiMin===x.presentiMax?String(x.presentiMin):`${x.presentiMin}–${x.presentiMax}`;
     const statiPersone=[];if(x.mancaPersoneMax)statiPersone.push(`<span class="pill pr">Fino a ${x.mancaPersoneMax} ${x.mancaPersoneMax===1?'mancante':'mancanti'}</span>`);if(x.extraPersoneMax)statiPersone.push(`<span class="pill py">Fino a +${x.extraPersoneMax}</span>`);if(!statiPersone.length)statiPersone.push('<span class="pill pg">Coperta</span>');
@@ -1197,7 +1295,8 @@ function htmlCoperturaFasce(esito,aperto){
     return `<tr><td>${x.attivita}</td><td>${oraMinuti(x.inizio)}–${oraMinuti(x.fine)}</td><td class="valore-numero">${x.necessarie}</td><td class="valore-numero">${programmate}</td><td>${statiPersone.join(' ')}</td><td class="valore-numero">${x.oreNecessarie.toFixed(1)} h</td><td class="valore-numero">${x.oreProgrammate.toFixed(1)} h</td><td>${statiOre.join(' ')}</td></tr>`;
   }).join('');
   const statoTitolo=[];if(esito.oreMancanti)statoTitolo.push(esito.oreMancanti.toFixed(1)+' ore-persona mancanti');if(esito.oreAggiunte)statoTitolo.push(esito.oreAggiunte.toFixed(1)+' ore-persona in più');if(!statoTitolo.length)statoTitolo.push(esito.oreRichieste?'copertura esatta':'da configurare');
-  return `<details class="cfg-section" ${attributiPannelloAppalto(esito.rep,aperto)}><summary>Controllo ${esito.titolo} — ${statoTitolo.join(' · ')}</summary><div class="cfg-body"><div class="tw"><table class="tabella-copertura"><thead><tr><th rowspan="2">Attività</th><th rowspan="2">Fascia</th><th colspan="3" class="gruppo-colonne">Persone</th><th colspan="3" class="gruppo-colonne">Ore-persona</th></tr><tr><th>Necessarie</th><th>Programmate</th><th>Stato</th><th>Necessarie</th><th>Programmate</th><th>Stato</th></tr></thead><tbody>${righe||'<tr><td colspan="8" class="empty">Nessun fabbisogno configurato per questa giornata.</td></tr>'}</tbody></table></div></div></details>`;
+  const timeline=esito.rep==='vuoti'?renderTimelineVuoti(righeSettimana):'';
+  return `<details class="cfg-section" ${attributiPannelloAppalto(esito.rep,aperto)}><summary>Controllo ${esito.titolo} — ${statoTitolo.join(' · ')}</summary><div class="cfg-body"><div class="tw"><table class="tabella-copertura"><thead><tr><th rowspan="2">Attività</th><th rowspan="2">Fascia</th><th colspan="3" class="gruppo-colonne">Persone</th><th colspan="3" class="gruppo-colonne">Ore-persona</th></tr><tr><th>Necessarie</th><th>Programmate</th><th>Stato</th><th>Necessarie</th><th>Programmate</th><th>Stato</th></tr></thead><tbody>${righe||'<tr><td colspan="8" class="empty">Nessun fabbisogno configurato per questa giornata.</td></tr>'}</tbody></table></div>${timeline}</div></details>`;
 }
 function calcolaControlloCarico(righeSettimana){const richieste=Number(CONFIG_APPALTO.carico?.[APPALTO_GIORNO])||0,programmate=righeValideCopertura(righeSettimana).filter(r=>r.giorno===APPALTO_GIORNO&&chiaveRepartoControllo(r)==='carico').reduce((s,r)=>s+durataTurno(r),0),mancanti=Math.max(0,richieste-programmate),aggiunte=Math.max(0,programmate-richieste);return{richieste,programmate,mancanti,aggiunte,completo:richieste>0&&mancanti<0.01&&aggiunte<0.01};}
 function renderControlliRepartiAppalto(righeSettimana){
@@ -1206,7 +1305,7 @@ function renderControlliRepartiAppalto(righeSettimana){
   const filtro=idRepartoSelezionato===ID_REPARTO_ECONOMIA?'forno':idRepartoSelezionato===ID_REPARTO_LAVAGGIO?'ceste':chiaveRepartoControllo({reparto:APPALTO_REPARTO,attivita:''});
   const riepilogo=[...esiti.map(e=>({titolo:e.titolo,richieste:e.oreRichieste,programmate:e.oreProgrammate,mancanti:e.oreMancanti,aggiunte:e.oreAggiunte,completo:e.completo})),{titolo:'Carico',richieste:carico.richieste,programmate:carico.programmate,mancanti:carico.mancanti,aggiunte:carico.aggiunte,completo:carico.completo}];
   const righe=riepilogo.map(x=>{const stato=[];if(x.mancanti)stato.push(`<span class="pill pr">Mancano ${x.mancanti.toFixed(1)} h</span>`);if(x.aggiunte)stato.push(`<span class="pill py">${x.aggiunte.toFixed(1)} h in più</span>`);if(!stato.length)stato.push(x.richieste?'<span class="pill pg">Copertura esatta</span>':'<span class="pill py">Da configurare</span>');return `<tr><td><b>${x.titolo}</b></td><td>${x.richieste.toFixed(1)} h</td><td>${x.programmate.toFixed(1)} h</td><td>${stato.join(' ')}</td></tr>`;}).join('');
-  const dettagli=esiti.filter(e=>APPALTO_REPARTO==='Tutti'||filtro===e.rep).map(e=>htmlCoperturaFasce(e,filtro===e.rep)).join('');
+  const dettagli=esiti.filter(e=>APPALTO_REPARTO==='Tutti'||filtro===e.rep).map(e=>htmlCoperturaFasce(e,filtro===e.rep,righeSettimana)).join('');
   const statoCarico=carico.mancanti?carico.mancanti.toFixed(1)+' ore mancanti':carico.aggiunte?carico.aggiunte.toFixed(1)+' ore in più':carico.richieste?'copertura esatta':'da configurare';
   const mostraCarico=APPALTO_REPARTO==='Tutti'||filtro==='carico',caricoHtml=mostraCarico?`<details class="cfg-section" ${attributiPannelloAppalto('carico',filtro==='carico')}><summary>Controllo Carico — ${statoCarico}</summary><div class="cfg-body"><div class="stats"><div class="stat"><div class="n">${carico.richieste.toFixed(1)}</div><div class="l">Ore richieste</div></div><div class="stat"><div class="n">${carico.programmate.toFixed(1)}</div><div class="l">Ore programmate</div></div><div class="stat ${carico.mancanti?'err':carico.aggiunte?'warn':''}"><div class="n">${carico.mancanti?carico.mancanti.toFixed(1):carico.aggiunte.toFixed(1)}</div><div class="l">${carico.mancanti?'Ore mancanti':carico.aggiunte?'Ore in più':'Differenza ore'}</div></div></div></div></details>`:'';
   el.innerHTML=`<details class="cfg-section" ${attributiPannelloAppalto('riepilogo',true)}><summary>Riepilogo copertura altri reparti</summary><div class="cfg-body"><div class="tw"><table><thead><tr><th>Reparto</th><th>Necessarie</th><th>Programmate</th><th>Stato</th></tr></thead><tbody>${righe}</tbody></table></div></div></details>${dettagli}${caricoHtml}`;
