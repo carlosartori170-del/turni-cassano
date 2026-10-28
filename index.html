@@ -1833,15 +1833,79 @@ function datiStampaReparto(categoria){
   })).filter(p=>p.giorni.some(g=>g.turni.length));
   return{...base,righe,titolo:meta.titolo,categoria};
 }
+const COLORI_ATTIVITA_PDF=[
+  {hex:'#dbeafe',rgb:[219,234,254]},
+  {hex:'#dcfce7',rgb:[220,252,231]},
+  {hex:'#fef3c7',rgb:[254,243,199]},
+  {hex:'#fce7f3',rgb:[252,231,243]},
+  {hex:'#ede9fe',rgb:[237,233,254]},
+  {hex:'#cffafe',rgb:[207,250,254]},
+  {hex:'#ffedd5',rgb:[255,237,213]},
+  {hex:'#e0e7ff',rgb:[224,231,255]}
+];
+const COLORI_FASCE_PDF={
+  mattina:{label:'Mattina',hex:'#dbeafe',rgb:[219,234,254]},
+  pomeriggio:{label:'Pomeriggio',hex:'#fef3c7',rgb:[254,243,199]},
+  sera:{label:'Sera',hex:'#f3e8ff',rgb:[243,232,255]},
+  notte:{label:'Notte',hex:'#e0e7ff',rgb:[224,231,255]}
+};
+function usaColoriDettaglioPdf(categoria){return['vuoti','grocery','forno','lavaggio'].includes(categoria);}
+function indiceColoreAttivitaPdf(testo){
+  const s=normalizzaNomePlanner(testo||'attivita');let hash=0;
+  for(let i=0;i<s.length;i++)hash=(hash*31+s.charCodeAt(i))>>>0;
+  return hash%COLORI_ATTIVITA_PDF.length;
+}
+function fasciaOrariaColorePdf(inizio){
+  const minuti=minutiOra(inizio);if(minuti==null)return'mattina';
+  if(minuti<300||minuti>=1200)return'notte';
+  if(minuti<720)return'mattina';
+  if(minuti<1020)return'pomeriggio';
+  return'sera';
+}
+function stileColoreTurnoPdf(turno,categoria){
+  if(categoria==='vuoti'||categoria==='grocery'){
+    const chiave=testoPulitoStampa(turno?.attivita)||testoPulitoStampa(turno?.reparto)||'Attività';
+    return{...COLORI_ATTIVITA_PDF[indiceColoreAttivitaPdf(chiave)],label:chiave};
+  }
+  if(categoria==='forno'||categoria==='lavaggio'){
+    const fascia=fasciaOrariaColorePdf(turno?.inizio);
+    return{...COLORI_FASCE_PDF[fascia],fascia};
+  }
+  return null;
+}
+function legendaColoriDettaglioPdf(dati){
+  if(dati.categoria==='vuoti'||dati.categoria==='grocery'){
+    const attivita=[...new Set(dati.righe.flatMap(p=>p.giorni.flatMap(g=>g.turni.map(t=>testoPulitoStampa(t.attivita)||testoPulitoStampa(t.reparto)||'Attività'))))].sort((a,b)=>a.localeCompare(b,'it',{sensitivity:'base'}));
+    return'<div class="legenda-turni legenda-dettaglio"><strong>Colori per mansione:</strong>'+attivita.map(a=>{const c=COLORI_ATTIVITA_PDF[indiceColoreAttivitaPdf(a)];return'<span><i style="background:'+c.hex+'"></i>'+escapeHtmlStampa(a)+'</span>';}).join('')+'</div>';
+  }
+  if(dati.categoria==='forno'||dati.categoria==='lavaggio')return'<div class="legenda-turni legenda-dettaglio"><strong>Colori per fascia:</strong>'+Object.values(COLORI_FASCE_PDF).map(c=>'<span><i style="background:'+c.hex+'"></i>'+c.label+'</span>').join('')+'</div>';
+  return'';
+}
+function disegnaTurniColoratiPdf(doc,cellaPdf,cellaDati,categoria){
+  const turni=cellaDati.turni||[];if(!turni.length)return;
+  const x=cellaPdf.x,y=cellaPdf.y,w=cellaPdf.width,h=cellaPdf.height,altezza=h/turni.length;
+  turni.forEach((turno,i)=>{
+    const stile=stileColoreTurnoPdf(turno,categoria);if(!stile)return;
+    const y0=y+i*altezza,hh=i===turni.length-1?y+h-y0:altezza;
+    doc.setFillColor(...stile.rgb);doc.rect(x+.12,y0+.12,w-.24,Math.max(0,hh-.24),'F');
+    if(i){doc.setDrawColor(174,180,174);doc.setLineWidth(.12);doc.line(x,y0,x+w,y0);}
+    doc.setTextColor(19,19,19);doc.setFont('helvetica','bold');doc.setFontSize(8.2);
+    doc.text(turno.inizio+'–'+turno.fine,x+1.5,y0+3.7,{maxWidth:w-3});
+    doc.setFont('helvetica','normal');doc.setFontSize(7.1);
+    const mansione=testoPulitoStampa(turno.reparto)+(turno.attivita?' - '+testoPulitoStampa(turno.attivita):'');
+    const righe=doc.splitTextToSize(mansione,w-3).slice(0,2);
+    doc.text(righe,x+1.5,y0+7.1,{lineHeightFactor:1.05});
+  });
+}
 function testoCellaStampa(cella){
   if(cella.assenza)return'ASSENTE';
   if(cella.riposo)return'RIPOSO';
   return cella.turni.map(t=>t.inizio+'–'+t.fine+'\n'+t.reparto+(t.attivita?' – '+t.attivita:'')).join('\n');
 }
-function htmlCellaStampa(cella){
+function htmlCellaStampa(cella,categoria='totale'){
   if(cella.assenza)return'<td class="cella-stampa-assenza">ASSENTE</td>';
   if(cella.riposo)return'<td class="cella-stampa-riposo">RIPOSO</td>';
-  const turni=cella.turni.map(t=>'<div class="turno-stampa '+classeRepartoStampa(t.reparto)+'"><div class="ora">'+escapeHtmlStampa(t.inizio)+'–'+escapeHtmlStampa(t.fine)+'</div><div class="mansione">'+escapeHtmlStampa(t.reparto)+(t.attivita?' – '+escapeHtmlStampa(t.attivita):'')+'</div></div>').join('');
+  const turni=cella.turni.map(t=>{const stile=stileColoreTurnoPdf(t,categoria),css=stile?' style="background:'+stile.hex+'"':'';return'<div class="turno-stampa '+classeRepartoStampa(t.reparto)+'"'+css+'><div class="ora">'+escapeHtmlStampa(t.inizio)+'–'+escapeHtmlStampa(t.fine)+'</div><div class="mansione">'+escapeHtmlStampa(t.reparto)+(t.attivita?' – '+escapeHtmlStampa(t.attivita):'')+'</div></div>';}).join('');
   return'<td>'+turni+'</td>';
 }
 function apriAnteprimaTurniAppalto(categoria='totale'){
@@ -1849,10 +1913,11 @@ function apriAnteprimaTurniAppalto(categoria='totale'){
   if(!dati.righe.length){toast('Non ci sono turni per questo reparto nella settimana selezionata.','warn');return;}
   document.getElementById('stampa-turni-overlay')?.remove();
   const intestazioni=dati.giorni.map(g=>'<th>'+escapeHtmlStampa(g.etichetta.slice(0,3))+'<br>'+fmtDataIt(g.data)+'</th>').join('');
-  const righe=dati.righe.map(p=>'<tr><td>'+escapeHtmlStampa(p.nome)+'</td>'+p.giorni.map(htmlCellaStampa).join('')+'</tr>').join('');
+  const righe=dati.righe.map(p=>'<tr><td>'+escapeHtmlStampa(p.nome)+'</td>'+p.giorni.map(c=>htmlCellaStampa(c,dati.categoria)).join('')+'</tr>').join('');
   const verifica=APPALTO_ASSENZE_VERIFICATE?'Assenze Nexus verificate':'Attenzione: assenze Nexus non verificate in questa sessione';
+  const legendaDettaglio=legendaColoriDettaglioPdf(dati);
   const opzioni=[{id:'totale',titolo:'Tutto l’appalto'},...REPARTI_PDF_APPALTO].map(r=>'<option value="'+r.id+'" '+(r.id===categoria?'selected':'')+'>'+escapeHtmlStampa(r.titolo)+'</option>').join('');
-  document.body.insertAdjacentHTML('beforeend',`<div id="stampa-turni-overlay" class="stampa-turni-overlay" role="dialog" aria-modal="true"><div class="stampa-turni-card"><div class="stampa-turni-toolbar"><div><h2>Anteprima turni — ${escapeHtmlStampa(dati.titolo)}</h2><small>${dati.righe.length} persone · ${escapeHtmlStampa(verifica)}</small></div><div class="brow"><select class="in" aria-label="Reparto da visualizzare" onchange="apriAnteprimaTurniAppalto(this.value)">${opzioni}</select><button class="btn bo" type="button" onclick="chiudiAnteprimaTurniAppalto()">Chiudi</button><button class="btn bo" type="button" onclick="scaricaPdfTurniReparti()">⬇ Tutti i reparti (.zip)</button><button class="btn bv" type="button" onclick="scaricaPdfTurniAppalto('${categoria}')">⬇ Scarica questo PDF</button></div></div><div class="stampa-turni-scroller"><div class="foglio-turni"><div class="foglio-turni-head"><div><h3>TURNI ${escapeHtmlStampa(dati.titolo)} — CASSANO MAGNAGO</h3><p>Settimana dal ${fmtDataIt(APPALTO_LUNEDI)} al ${fmtDataIt(addGiorni(APPALTO_LUNEDI,6))}</p></div><p>Generato il ${new Date().toLocaleString('it-IT')}</p></div><table class="tabella-turni-pdf"><thead><tr><th>PERSONA</th>${intestazioni}</tr></thead><tbody>${righe}</tbody></table><div class="legenda-turni"><span><i class="rep-ortofrutta"></i>Ortofrutta</span><span><i class="rep-carico"></i>Carico</span><span><i class="rep-lavaggio"></i>Lavaggio</span><span><i class="rep-economia"></i>Economia / Forno</span><span><i class="rep-vuoti"></i>Vuoti</span><span><i class="rep-grocery"></i>Grocery</span><span><i class="cella-stampa-riposo"></i>Riposo</span><span><i class="cella-stampa-assenza"></i>Assente</span></div></div></div></div></div>`);
+  document.body.insertAdjacentHTML('beforeend',`<div id="stampa-turni-overlay" class="stampa-turni-overlay" role="dialog" aria-modal="true"><div class="stampa-turni-card"><div class="stampa-turni-toolbar"><div><h2>Anteprima turni — ${escapeHtmlStampa(dati.titolo)}</h2><small>${dati.righe.length} persone · ${escapeHtmlStampa(verifica)}</small></div><div class="brow"><select class="in" aria-label="Reparto da visualizzare" onchange="apriAnteprimaTurniAppalto(this.value)">${opzioni}</select><button class="btn bo" type="button" onclick="chiudiAnteprimaTurniAppalto()">Chiudi</button><button class="btn bo" type="button" onclick="scaricaPdfTurniReparti()">⬇ Tutti i reparti (.zip)</button><button class="btn bv" type="button" onclick="scaricaPdfTurniAppalto('${categoria}')">⬇ Scarica questo PDF</button></div></div><div class="stampa-turni-scroller"><div class="foglio-turni"><div class="foglio-turni-head"><div><h3>TURNI ${escapeHtmlStampa(dati.titolo)} — CASSANO MAGNAGO</h3><p>Settimana dal ${fmtDataIt(APPALTO_LUNEDI)} al ${fmtDataIt(addGiorni(APPALTO_LUNEDI,6))}</p></div><p>Generato il ${new Date().toLocaleString('it-IT')}</p></div><table class="tabella-turni-pdf"><thead><tr><th>PERSONA</th>${intestazioni}</tr></thead><tbody>${righe}</tbody></table><div class="legenda-turni"><span><i class="rep-ortofrutta"></i>Ortofrutta</span><span><i class="rep-carico"></i>Carico</span><span><i class="rep-lavaggio"></i>Lavaggio</span><span><i class="rep-economia"></i>Economia / Forno</span><span><i class="rep-vuoti"></i>Vuoti</span><span><i class="rep-grocery"></i>Grocery</span><span><i class="cella-stampa-riposo"></i>Riposo</span><span><i class="cella-stampa-assenza"></i>Assente</span></div>${legendaDettaglio}</div></div></div></div>`);
 }
 function apriAnteprimaTurniReparti(){apriAnteprimaTurniAppalto('vuoti');}
 function chiudiAnteprimaTurniAppalto(){document.getElementById('stampa-turni-overlay')?.remove();}
@@ -1876,7 +1941,14 @@ function creaDocumentoPdfTurni(dati){
       const cella=dati.righe[data.row.index].giorni[data.column.index-1];
       if(cella.assenza){data.cell.styles.fillColor=[254,226,226];data.cell.styles.textColor=[153,27,27];data.cell.styles.fontStyle='bold';data.cell.styles.halign='center';}
       else if(cella.riposo){data.cell.styles.fillColor=[219,234,254];data.cell.styles.textColor=[30,58,138];data.cell.styles.fontStyle='bold';data.cell.styles.halign='center';}
-      else if(cella.turni.length)data.cell.styles.fillColor=colorePdfReparto(cella.turni[0].reparto);
+      else if(cella.turni.length){
+        if(usaColoriDettaglioPdf(dati.categoria)){data.cell.styles.fillColor=[255,255,255];data.cell.styles.textColor=[255,255,255];}
+        else data.cell.styles.fillColor=colorePdfReparto(cella.turni[0].reparto);
+      }
+    },didDrawCell:data=>{
+      if(data.section!=='body'||data.column.index===0||!usaColoriDettaglioPdf(dati.categoria))return;
+      const cella=dati.righe[data.row.index].giorni[data.column.index-1];
+      if(!cella.assenza&&!cella.riposo&&cella.turni.length)disegnaTurniColoratiPdf(doc,data.cell,cella,dati.categoria);
     },pageBreak:'auto',rowPageBreak:'avoid'});
     return doc;
   };
@@ -1892,7 +1964,8 @@ function creaDocumentoPdfTurni(dati){
   if(doc.getNumberOfPages()===1){
     const y=Math.min(altezzaFinale-7,(doc.lastAutoTable?.finalY||27)+6);
     doc.setFont('helvetica','normal');doc.setFontSize(orizzontale?7.4:6.8);doc.setTextColor(70,70,70);
-    doc.text('Colori: Ortofrutta verde - Carico arancio - Lavaggio blu - Economia/Forno viola - Vuoti giallo - Grocery turchese - Riposo blu - Assente rosso',margine,y);
+    const notaColori=(dati.categoria==='vuoti'||dati.categoria==='grocery')?'Colori distinti per mansione':(dati.categoria==='forno'||dati.categoria==='lavaggio')?'Colori per fascia oraria: mattina azzurro - pomeriggio giallo - sera viola - notte indaco':'Colori: Ortofrutta verde - Carico arancio - Lavaggio blu - Economia/Forno viola - Vuoti giallo - Grocery turchese - Riposo blu - Assente rosso';
+    doc.text(notaColori,margine,y);
     doc.text('Generato il '+new Date().toLocaleString('it-IT')+(APPALTO_ASSENZE_VERIFICATE?' - Assenze Nexus verificate':' - Assenze Nexus non verificate'),margine,y+4);
   }
   return doc;
