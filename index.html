@@ -873,9 +873,18 @@ async function salvaMappatureSupabase(){
   const righe=righeMappatureSupabase();if(!righe.length)return null;
   const{error}=await sb.from('MappatureCassano').upsert(righe,{onConflict:'Tipo,ChiaveOrigine'});return error;
 }
+function turnoConRepartoAttivitaValido(r){
+  if(r.tipo==='riposo'||(!r.id_attivita&&!r.id_catalogo_programmazione))return true;
+  if(!r.id_reparto||r.id_attivita&&r.id_catalogo_programmazione)return false;
+  if(r.id_attivita){const a=ATTIVITA_TUTTE.find(x=>String(x.ID_Attivita)===String(r.id_attivita));return!!a&&String(a.ID_Reparto)===String(r.id_reparto);}
+  const c=CATALOGO_PROGRAMMAZIONE_CASSANO.find(x=>String(x.ID)===String(r.id_catalogo_programmazione));return!!c&&c.Attiva&&String(c.ID_Reparto)===String(r.id_reparto);
+}
 async function salvaSettimanaSupabase(){
   const settimana=APPALTO_SETTIMANE[APPALTO_LUNEDI];if(!settimana){toast('Prima crea la settimana.','warn');return;}
   if(!SESSIONE_CASSANO||!projectIdValido()){toast('Sessione Supabase non valida.','err');return;}
+  normalizzaRighePlanner(settimana);
+  const incompatibili=(settimana.righe||[]).filter(r=>!turnoConRepartoAttivitaValido(r));
+  if(incompatibili.length){statoSync('Salvataggio bloccato');toast(`Salvataggio bloccato: ${incompatibili.length} fasce hanno un'attività non compatibile con il reparto. Correggile prima di salvare.`,'err');return;}
   statoSync('Salvataggio settimana…');
   const ora=new Date().toISOString(),utente=SESSIONE_CASSANO.user.id,origine=(settimana.origine||'').match(/\d{4}-\d{2}-\d{2}/)?.[0]||null;
   const{error:e1}=await sb.from('SettimaneCassano').upsert({Lunedi:APPALTO_LUNEDI,ID_Magazzino:ID_MAGAZZINO_CASSANO,Stato:settimana.stato||'bozza',OrigineLunedi:origine,AggiornatoIl:ora,AggiornatoDa:utente},{onConflict:'Lunedi'});
@@ -886,7 +895,6 @@ async function salvaSettimanaSupabase(){
   if(e2){statoSync('Verifica incompleta');toast('Settimana salvata, verifica righe fallita: '+e2.message,'warn');return;}
   const attuali=new Set(righe.map(r=>r.UID)),daEliminare=(esistenti||[]).map(x=>x.UID).filter(x=>!attuali.has(x));
   if(daEliminare.length){const{error}=await sb.from('TurniCassanoPianificati').delete().in('UID',daEliminare);if(error){statoSync('Pulizia incompleta');toast('Turni salvati, ma alcune righe eliminate sono rimaste: '+error.message,'warn');return;}}
-  const erroreMap=await salvaMappatureSupabase();if(erroreMap){statoSync('Settimana salvata');toast('Settimana salvata; collegamenti non sincronizzati: '+erroreMap.message,'warn');return;}
   statoSync('Salvata '+APPALTO_LUNEDI);toast('Settimana salvata su Supabase.');
 }
 function normalizzaNomePlanner(s){return String(s||'').replace(/\([^)]*\)/g,' ').normalize('NFD').replace(/[\u0300-\u036f]/g,'').replace(/[^a-zA-Z0-9]+/g,' ').trim().toLowerCase();}
@@ -898,17 +906,22 @@ function collegaDipendentePlanner(nome){
   d=DIPENDENTI.find(x=>{const dn=normalizzaNomePlanner(x.Nome);return parole.length&&parole.every(p=>dn.includes(p));});
   return d||null;
 }
-function collegaRepartoPlanner(nome){const n=normalizzaNomePlanner(nome),id=APPALTO_MAPPING.reparti[n];return REPARTI.find(r=>id&&String(r.ID_Reparto)===String(id))||REPARTI.find(r=>normalizzaNomePlanner(nomeReparto(r))===n)||null;}
+function collegaRepartoPlanner(nome){const n=normalizzaNomePlanner(nome);return REPARTI.find(r=>normalizzaNomePlanner(nomeReparto(r))===n)||null;}
 function collegaAttivitaPlanner(idReparto,nome){
-  const n=normalizzaNomePlanner(nome),id=APPALTO_MAPPING.attivita[String(idReparto||'')+'|'+n];const elenco=idReparto?attivitaDiReparto(idReparto):ATTIVITA_TUTTE;
-  return elenco.find(a=>id&&String(a.ID_Attivita)===String(id))||elenco.find(a=>normalizzaNomePlanner(nomeAttivita(a))===n)||elenco.find(a=>{const an=normalizzaNomePlanner(nomeAttivita(a));return n&&((an.includes(n)||n.includes(an))&&Math.min(an.length,n.length)>3);})||null;
+  const n=normalizzaNomePlanner(nome),elenco=idReparto?attivitaDiReparto(idReparto):[];
+  return elenco.find(a=>normalizzaNomePlanner(nomeAttivita(a))===n)||null;
 }
 function normalizzaRighePlanner(settimana){
   (settimana?.righe||[]).forEach(r=>{
-    r.origine_nome=r.origine_nome||r.nome;r.origine_reparto=r.origine_reparto||r.reparto;r.origine_attivita=r.origine_attivita||r.attivita;
+    r.origine_nome=r.origine_nome||r.nome;
     if(!r.id_dipendente){const d=collegaDipendentePlanner(r.nome);if(d){r.id_dipendente=d.ID_Dipendente;r.nome=d.Nome;}}
-    if(!r.id_reparto){const rep=collegaRepartoPlanner(r.reparto);if(rep){r.id_reparto=rep.ID_Reparto;r.reparto=nomeReparto(rep);}}
-    if(!r.id_attivita){const a=collegaAttivitaPlanner(r.id_reparto,r.attivita);if(a){r.id_attivita=a.ID_Attivita;r.attivita=nomeAttivita(a);}}
+    const repId=r.id_reparto?REPARTI.find(x=>String(x.ID_Reparto)===String(r.id_reparto)):null;
+    if(repId)r.reparto=nomeReparto(repId);else if(!r.id_reparto){const rep=collegaRepartoPlanner(r.reparto);if(rep){r.id_reparto=rep.ID_Reparto;r.reparto=nomeReparto(rep);}}
+    r._incompatibile=false;
+    if(r.id_catalogo_programmazione){const c=catalogoProgrammazioneInterno(r.id_catalogo_programmazione);if(c&&String(c.ID_Reparto)===String(r.id_reparto))r.attivita=c.Nome;else{r._incompatibile=true;r.attivita='Attività da correggere';}}
+    else if(r.id_attivita){const a=ATTIVITA_TUTTE.find(x=>String(x.ID_Attivita)===String(r.id_attivita));if(a&&String(a.ID_Reparto)===String(r.id_reparto))r.attivita=nomeAttivita(a);else{r._incompatibile=true;r.attivita='Attività da correggere';}}
+    else if(r.id_reparto){const a=collegaAttivitaPlanner(r.id_reparto,r.attivita);if(a){r.id_attivita=a.ID_Attivita;r.attivita=nomeAttivita(a);}}
+    r.origine_reparto=r.reparto||'';r.origine_attivita=r.attivita||'';
     r.tipo=r.tipo||'standard';
   });
 }
@@ -922,13 +935,8 @@ function importaPdfComeSettimana(lunedi){
   })));
   APPALTO_SETTIMANE[lunedi]={stato:'bozza',origine:'PDF settimana 38',righe};salvaSettimaneAppalto();return righe.length;
 }
-function lunediProssimaSettimana(ora=new Date()){
-  const parti=new Intl.DateTimeFormat('it-IT',{timeZone:'Europe/Rome',year:'numeric',month:'2-digit',day:'2-digit'}).formatToParts(ora),valore=tipo=>parti.find(p=>p.type===tipo).value;
-  const oggi=valore('year')+'-'+valore('month')+'-'+valore('day');
-  return addGiorni(lunediSettimana(oggi),7);
-}
 function renderProgrammazioneAppaltoTab(){
-  APPALTO_LUNEDI=lunediProssimaSettimana();
+  const oggi=new Date().toISOString().slice(0,10);APPALTO_LUNEDI=lunediSettimana(oggi);
   if(!APPALTO_SETTIMANE[APPALTO_LUNEDI]&&APPALTO_LUNEDI==='2026-09-14')importaPdfComeSettimana(APPALTO_LUNEDI);
   document.getElementById('mc').innerHTML=`<div class="card"><div class="ct">Programmazione dell'intero appalto</div>
     <div class="alert aok">Programmatore unico collegato a Supabase: ogni fascia appartiene alla persona, anche quando nella stessa giornata cambia reparto o attività. Le modifiche restano in bozza sul dispositivo fino a “Salva settimana”.</div>
@@ -1043,9 +1051,20 @@ function selettoreOrarioAppalto(r,campo){
 }
 function aggiornaRigaAppalto(uid,campo,valore){
   const r=trovaRigaAppalto(uid);if(!r)return;
-  if(campo==='dipendente'){const d=DIPENDENTI.find(x=>String(x.ID_Dipendente)===String(valore));r.id_dipendente=d?.ID_Dipendente||null;r.nome=d?.Nome||'';}
-  else if(campo==='reparto'){if(valore)APPALTO_NUOVE_RIGHE_VISIBILI.delete(uid);const rep=REPARTI.find(x=>String(x.ID_Reparto)===String(valore)),origine=normalizzaNomePlanner(r.origine_reparto||r.reparto);if(rep&&origine){APPALTO_MAPPING.reparti[origine]=rep.ID_Reparto;salvaMappatureAppalto();}r.origine_reparto=r.origine_reparto||r.reparto;r.origine_attivita=r.origine_attivita||r.attivita;r.id_reparto=rep?.ID_Reparto||null;r.reparto=rep?nomeReparto(rep):'';r.id_attivita=null;r.id_catalogo_programmazione=null;r.attivita='';}
-  else if(campo==='attivita'){const interno=String(valore).startsWith('c:'),id=String(valore).slice(2),a=interno?null:ATTIVITA_TUTTE.find(x=>String(x.ID_Attivita)===id),c=interno?catalogoProgrammazioneInterno(id):null,origine=normalizzaNomePlanner(r.origine_attivita||r.attivita);if(a&&origine){APPALTO_MAPPING.attivita[String(r.id_reparto||'')+'|'+origine]=a.ID_Attivita;salvaMappatureAppalto();}r.origine_attivita=r.origine_attivita||r.attivita;r.id_attivita=a?.ID_Attivita||null;r.id_catalogo_programmazione=c?.ID||null;r.attivita=a?nomeAttivita(a):c?.Nome||'';}
+  if(campo==='dipendente'){const d=DIPENDENTI.find(x=>String(x.ID_Dipendente)===String(valore));r.id_dipendente=d?.ID_Dipendente||null;r.nome=d?.Nome||'';r.origine_nome=r.nome;}
+  else if(campo==='reparto'){
+    if(valore)APPALTO_NUOVE_RIGHE_VISIBILI.delete(uid);
+    const rep=REPARTI.find(x=>String(x.ID_Reparto)===String(valore));
+    r.id_reparto=rep?.ID_Reparto||null;r.reparto=rep?nomeReparto(rep):'';r.origine_reparto=r.reparto;
+    r.id_attivita=null;r.id_catalogo_programmazione=null;r.attivita='';r.origine_attivita='';r._incompatibile=false;
+  }
+  else if(campo==='attivita'){
+    const interno=String(valore).startsWith('c:'),id=String(valore).slice(2);
+    const a=interno?null:ATTIVITA_TUTTE.find(x=>String(x.ID_Attivita)===id&&String(x.ID_Reparto)===String(r.id_reparto));
+    const c=interno?CATALOGO_PROGRAMMAZIONE_CASSANO.find(x=>String(x.ID)===id&&x.SoloProgrammazione&&x.Attiva&&String(x.ID_Reparto)===String(r.id_reparto)):null;
+    if(valore&&!a&&!c){r.id_attivita=null;r.id_catalogo_programmazione=null;r.attivita='';r.origine_attivita='';r._incompatibile=false;toast('Attività non compatibile con il reparto selezionato.','err');}
+    else{r.id_attivita=a?.ID_Attivita||null;r.id_catalogo_programmazione=c?.ID||null;r.attivita=a?nomeAttivita(a):c?.Nome||'';r.origine_attivita=r.attivita;r._incompatibile=false;}
+  }
   else r[campo]=valore;
   salvaSettimaneAppalto();renderCorpoAppalto();
 }
@@ -1409,19 +1428,11 @@ function catalogoTurnoProgrammazione(turno){return turno?.id_catalogo_programmaz
 function rgbDaHex(hex){const s=String(hex||'#D3F0E3').replace('#','');return[parseInt(s.slice(0,2),16),parseInt(s.slice(2,4),16),parseInt(s.slice(4,6),16)];}
 function hexDaRgb(rgb){return'#'+rgb.map(n=>Math.max(0,Math.min(255,Math.round(n))).toString(16).padStart(2,'0')).join('').toUpperCase();}
 function miscelaColore(hex,verso,peso){const a=rgbDaHex(hex),b=verso==='nero'?[0,0,0]:[255,255,255];return hexDaRgb(a.map((n,i)=>n+(b[i]-n)*peso));}
-function contrastoColore(hex){
-  const luminanza=rgb=>rgb.map(n=>{const v=n/255;return v<=.04045?v/12.92:((v+.055)/1.055)**2.4;}).reduce((s,n,i)=>s+n*[.2126,.7152,.0722][i],0),lum=luminanza(rgbDaHex(hex));
-  if((lum+.05)/(luminanza([19,19,19])+.05)>=4.5)return'#131313';
-  return 1.05/(lum+.05)>=4.5?'#FFFFFF':'#000000';
-}
-function gradazioneFasciaOraria(base,fascia){
-  const rgb=rgbDaHex(base),lum=(Math.max(...rgb)+Math.min(...rgb))/510,obiettivo=({mattina:.90,pomeriggio:.68,sera:.45,notte:.22})[fascia]??.68;
-  return obiettivo>=lum?miscelaColore(base,'bianco',lum===1?0:(obiettivo-lum)/(1-lum)):miscelaColore(base,'nero',1-obiettivo/lum);
-}
+function contrastoColore(hex){const[r,g,b]=rgbDaHex(hex),lum=(r*299+g*587+b*114)/1000;return lum<135?'#FFFFFF':'#131313';}
 function coloreTurnoDaCatalogo(turno){
   const c=catalogoTurnoProgrammazione(turno);if(!c)return null;
   let hex=c.ColoreBase||'#D3F0E3';
-  if(c.GradazioneOraria)hex=gradazioneFasciaOraria(hex,fasciaOrariaColorePdf(turno.inizio));
+  if(c.GradazioneOraria){const fascia=fasciaOrariaColorePdf(turno.inizio),pesi={mattina:.48,pomeriggio:.32,sera:.18,notte:.04};hex=miscelaColore(hex,'bianco',pesi[fascia]??.2);}
   return{hex,rgb:rgbDaHex(hex),textHex:contrastoColore(hex),textRgb:rgbDaHex(contrastoColore(hex)),label:c.Nome||turno.attivita||''};
 }
 function repartoPrincipaleDipendente(id){return REPARTI_PRINCIPALI_CASSANO.get(String(id))||null;}
@@ -1479,8 +1490,9 @@ function personeVistaSettimanale(settimana){
   }).sort((a,b)=>a.Nome.localeCompare(b.Nome,'it',{sensitivity:'base'}));
 }
 function htmlTurnoSettimanale(r){
-  const stile=stileColoreTurnoPdf(r,categoriaDirettaPdfTurno(r)),base=stile||{hex:classeRepartoStampa(r.reparto)==='rep-ortofrutta'?'#DCFCE7':classeRepartoStampa(r.reparto)==='rep-carico'?'#FFEDD5':classeRepartoStampa(r.reparto)==='rep-lavaggio'?'#DBEAFE':classeRepartoStampa(r.reparto)==='rep-economia'?'#F3E8FF':classeRepartoStampa(r.reparto)==='rep-vuoti'?'#FEF3C7':classeRepartoStampa(r.reparto)==='rep-grocery'?'#CCFBF1':'#F3F4F6',textHex:'#131313'};
-  return `<div class="turno-settimanale" style="background:${base.hex};color:${base.textHex||'#131313'}" title="${testoHtmlAppalto(r.reparto)} — ${testoHtmlAppalto(r.attivita)}"><b>${r.inizio||'—'}–${r.fine||'—'}</b><span>${testoHtmlAppalto(r.reparto)}${r.attivita?' · '+testoHtmlAppalto(r.attivita):''}</span></div>`;
+  if(r._incompatibile)return `<div class="turno-settimanale" style="background:#FDE3E1;color:#991B1B;border-color:#B83228"><b>${r.inizio||'—'}–${r.fine||'—'}</b><span>Reparto/attività da correggere</span></div>`;
+  const stile=coloreTurnoDaCatalogo(r),base=stile||{hex:classeRepartoStampa(r.reparto)==='rep-ortofrutta'?'#DCFCE7':classeRepartoStampa(r.reparto)==='rep-carico'?'#FFEDD5':classeRepartoStampa(r.reparto)==='rep-lavaggio'?'#DBEAFE':classeRepartoStampa(r.reparto)==='rep-economia'?'#F3E8FF':classeRepartoStampa(r.reparto)==='rep-vuoti'?'#FEF3C7':classeRepartoStampa(r.reparto)==='rep-grocery'?'#CCFBF1':'#F3F4F6',textHex:'#131313'};
+  return `<div class="turno-settimanale" style="background:${base.hex};color:${base.textHex}" title="${testoHtmlAppalto(r.reparto)} — ${testoHtmlAppalto(r.attivita)}"><b>${r.inizio||'—'}–${r.fine||'—'}</b><span>${testoHtmlAppalto(r.reparto)}${r.attivita?' · '+testoHtmlAppalto(r.attivita):''}</span></div>`;
 }
 function renderVistaSettimanaleAppalto(settimana){
   const persone=personeVistaSettimanale(settimana),giorni=[...Array(7)].map((_,i)=>({i,data:addGiorni(APPALTO_LUNEDI,i)}));
@@ -1552,7 +1564,7 @@ function renderCorpoAppalto(){
   let righe=(filtriAttivi||filtroRepartoPrincipale)?tutteConVirtuali.filter(r=>personeCorrispondenti.has(chiavePersonaFiltro(r))):tutteConVirtuali;
   const mostraContesto=!!(filtroRepartoPrincipale||APPALTO_FILTRO_REPARTO||APPALTO_FILTRO_ATTIVITA),rigaFuoriFiltro=r=>mostraContesto&&!uidCorrispondenti.has(r.uid);
   const assenti=righe.filter(r=>turnoAssente(r)&&(r.virtuale||(r.tipo==='standard'&&!sostituzioneEsistente(r.uid))));if(APPALTO_SOLO_ASSENTI)righe=assenti;
-  const nonProgrammatiVisibili=righe.filter(r=>r.virtuale).length,nonCollegati=righe.filter(r=>!r.virtuale&&r.tipo!=='riposo'&&(!r.id_dipendente||!r.id_reparto||!r.id_attivita)).length,conflitti=righe.filter(r=>!r.virtuale&&r.tipo!=='riposo'&&conflittiRigaAppalto(r).length).length,riposi=righe.filter(r=>r.tipo==='riposo').length;
+  const nonProgrammatiVisibili=righe.filter(r=>r.virtuale).length,nonCollegati=righe.filter(r=>!r.virtuale&&r.tipo!=='riposo'&&(!r.id_dipendente||!r.id_reparto||(!r.id_attivita&&!r.id_catalogo_programmazione)||r._incompatibile)).length,conflitti=righe.filter(r=>!r.virtuale&&r.tipo!=='riposo'&&conflittiRigaAppalto(r).length).length,riposi=righe.filter(r=>r.tipo==='riposo').length;
   if(APPALTO_VISTA_PERSONE){body.innerHTML=`<div class="stats"><div class="stat"><div class="n">${righe.length}</div><div class="l">Fasce mostrate</div></div><div class="stat ${assenti.length?'err':''}"><div class="n">${assenti.length}</div><div class="l">Da sostituire</div></div><div class="stat ${conflitti?'err':''}"><div class="n">${conflitti}</div><div class="l">Fasce sovrapposte</div></div></div>${renderVistaPersoneAppalto(righe)}`;aggiornaComandiReplica();return;}
   const ordineRighe=new Map(settimana.righe.map((r,i)=>[r.uid,i]));
   const html=righe.sort((a,b)=>nomeVisualizzatoRigaAppalto(a).localeCompare(nomeVisualizzatoRigaAppalto(b),'it',{sensitivity:'base'})||String(a.id_dipendente||'').localeCompare(String(b.id_dipendente||''))||(ordineRighe.get(a.uid)??Number.MAX_SAFE_INTEGER)-(ordineRighe.get(b.uid)??Number.MAX_SAFE_INTEGER)||String(a.inizio||'').localeCompare(String(b.inizio||''))).map(r=>{
@@ -1568,7 +1580,7 @@ function renderCorpoAppalto(){
       const azioneRiposo=APPALTO_MODALITA_REPLICA?'':`<input type="button" class="comando-input meno" value="−" title="Annulla il giorno di riposo" aria-label="Annulla il giorno di riposo" onclick="annullaRiposoAppalto('${r.uid}')">`;
       return `<tr${classeContesto}><td>${statoRiposo}${badgeContesto}</td><td><b>${nomeVisualizzatoRigaAppalto(r)}</b></td><td>—</td><td>—</td><td>—</td><td>0.0 h</td><td><div class="azioni-turno">${azioneRiposo}</div></td></tr>`;
     }
-    if(ass)stato=sost?'<span class="pill py">Assenza coperta</span>':'<span class="pill pr">Da sostituire</span>';if(conflitto)stato+=' <span class="pill pr">Sovrapposti</span>';
+    if(ass)stato=sost?'<span class="pill py">Assenza coperta</span>':'<span class="pill pr">Da sostituire</span>';if(conflitto)stato+=' <span class="pill pr">Sovrapposti</span>';if(r._incompatibile)stato+=' <span class="pill pr">Reparto/attività da correggere</span>';
     if(conflitto)stato+=`<br><small>Con: ${dettaglioConflitto}</small>`;
     let azione='';
     if(APPALTO_MODALITA_REPLICA){
@@ -2047,10 +2059,10 @@ const COLORI_ATTIVITA_PDF=[
   {hex:'#e0e7ff',rgb:[224,231,255]}
 ];
 const COLORI_FASCE_PDF={
-  mattina:{label:'Mattina',hex:'#BAE6FD',rgb:[186,230,253],textHex:'#131313',textRgb:[19,19,19]},
-  pomeriggio:{label:'Pomeriggio',hex:'#FBBF24',rgb:[251,191,36],textHex:'#131313',textRgb:[19,19,19]},
-  sera:{label:'Sera',hex:'#C084FC',rgb:[192,132,252],textHex:'#131313',textRgb:[19,19,19]},
-  notte:{label:'Notte',hex:'#312E81',rgb:[49,46,129],textHex:'#FFFFFF',textRgb:[255,255,255]}
+  mattina:{label:'Mattina',hex:'#dbeafe',rgb:[219,234,254]},
+  pomeriggio:{label:'Pomeriggio',hex:'#fef3c7',rgb:[254,243,199]},
+  sera:{label:'Sera',hex:'#f3e8ff',rgb:[243,232,255]},
+  notte:{label:'Notte',hex:'#e0e7ff',rgb:[224,231,255]}
 };
 function usaColoriDettaglioPdf(categoria){return['vuoti','grocery','forno','lavaggio'].includes(categoria);}
 function indiceColoreAttivitaPdf(testo){
