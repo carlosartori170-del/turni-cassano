@@ -1513,12 +1513,36 @@ function renderVistaSettimanaleAppalto(settimana){
   const righe=persone.map(d=>{const rep=REPARTI.find(r=>Number(r.ID_Reparto)===Number(repartoPrincipaleDipendente(d.ID_Dipendente))),celle=giorni.map(g=>{const ass=APPALTO_ASSENZE.get(chiaveAssenza(d.ID_Dipendente,g.data)),turni=(settimana.righe||[]).filter(r=>Number(r.giorno)===g.i&&String(r.id_dipendente)===String(d.ID_Dipendente)),riposo=turni.some(r=>r.tipo==='riposo'),validi=turni.filter(r=>r.tipo!=='riposo');let contenuto='';if(ass)contenuto='<div class="cella-settimana-stato assente">ASSENTE</div>';else if(riposo)contenuto='<div class="cella-settimana-stato riposo">RIPOSO</div>';else contenuto=validi.map(htmlTurnoSettimanale).join('')||'<span class="cella-vuota">＋</span>';return `<td class="cella-giorno-settimana" onclick="apriEditorCellaSettimanale(${d.ID_Dipendente},${g.i})">${contenuto}</td>`;}).join('');return `<tr><td class="persona-settimana"><b>${testoHtmlAppalto(d.Nome)}</b>${rep?`<small>${testoHtmlAppalto(nomeReparto(rep))}</small>`:'<small>Reparto da assegnare</small>'}</td>${celle}</tr>`;}).join('');
   return `<div class="vista-settimanale-intro"><b>Programmazione settimanale</b><span>Clicca una cella per inserire, modificare o eliminare le fasce della giornata.</span></div><div class="tw griglia-settimanale-wrap"><table class="griglia-settimanale"><thead><tr><th>Persona</th>${testa}</tr></thead><tbody>${righe||'<tr><td colspan="8" class="empty">Nessuna persona corrisponde ai filtri selezionati.</td></tr>'}</tbody></table></div>`;
 }
+function calcolaCoperturaSettimanaleOrtofrutta(righeSettimana){
+  const definizioni=[
+    {chiave:'ventilazione',nome:'Ortofrutta — Ventilazione pura',valori:[]},
+    {chiave:'ricevimento',nome:'Ortofrutta — Ricevimento',valori:[]},
+    {chiave:'legaggio',nome:'Ortofrutta — Legaggio',valori:[]},
+    {chiave:'navetta',nome:'Ortofrutta — Navetta',valori:[]}
+  ];
+  for(let g=0;g<7;g++){
+    const data=addGiorni(APPALTO_LUNEDI,g),colli=APPALTO_OF_DATA.previsioni[data];
+    const valide=righeSettimana.filter(r=>Number(r.giorno)===g&&(!turnoAssente(r)||r.tipo==='sostituzione'));
+    const oreAtt=(id,nome)=>valide.filter(r=>rigaOrtofrutta(r)&&rigaAttivita(r,id,nome)).reduce((tot,r)=>tot+durataTurno(r),0);
+    const obVent=Number(APPALTO_OF_DATA.obiettivi[ID_ATTIVITA_VENTILAZIONE])||0,necessarieVent=colli!=null&&obVent>0?colli/obVent:null;
+    const valori={
+      ventilazione:{necessarie:necessarieVent,programmate:oreAtt(ID_ATTIVITA_VENTILAZIONE,'ventil')},
+      ricevimento:{necessarie:Number(CONFIG_APPALTO.ricevimento?.[g])||null,programmate:oreAtt(ID_ATTIVITA_RICEVIMENTO,'ricev')},
+      legaggio:{necessarie:necessarieVent==null?null:necessarieVent*(Number(APPALTO_OF_DATA.percLegaggio)||0)/100,programmate:oreAtt(ID_ATTIVITA_LEGAGGIO,'legagg')},
+      navetta:{necessarie:necessarieVent==null?null:necessarieVent*(Number(APPALTO_OF_DATA.percNavetta)||0)/100,programmate:oreAtt(ID_ATTIVITA_NAVETTA,'navett')}
+    };
+    definizioni.forEach(d=>d.valori.push(valori[d.chiave]));
+  }
+  return definizioni;
+}
 function renderCoperturaSettimanaleAppalto(righeSettimana){
-  const vecchio=APPALTO_GIORNO,repSelezionato=REPARTI.find(r=>nomeReparto(r)===APPALTO_REPARTO),id=Number(repSelezionato?.ID_Reparto)||0,chiave=id===ID_REPARTO_ECONOMIA?'forno':id===ID_REPARTO_LAVAGGIO?'ceste':chiaveRepartoControllo({reparto:APPALTO_REPARTO,attivita:''}),reps=chiave&&CONTROLLO_REPARTI_FASCE[chiave]?[chiave]:Object.keys(CONTROLLO_REPARTI_FASCE),risultati={};
+  const vecchio=APPALTO_GIORNO,repSelezionato=REPARTI.find(r=>nomeReparto(r)===APPALTO_REPARTO),id=Number(repSelezionato?.ID_Reparto)||0,chiave=id===ID_REPARTO_ECONOMIA?'forno':id===ID_REPARTO_LAVAGGIO?'ceste':chiaveRepartoControllo({reparto:APPALTO_REPARTO,attivita:''}),mostraOrtofrutta=APPALTO_REPARTO==='Tutti'||id===ID_REPARTO_ORTOFRUTTA,reps=id===ID_REPARTO_ORTOFRUTTA?[]:(chiave&&CONTROLLO_REPARTI_FASCE[chiave]?[chiave]:Object.keys(CONTROLLO_REPARTI_FASCE)),risultati={};
   try{reps.forEach(rep=>{risultati[rep]=[];for(let g=0;g<7;g++){APPALTO_GIORNO=g;risultati[rep].push(calcolaCoperturaFasce(rep,righeSettimana));}});}finally{APPALTO_GIORNO=vecchio;}
   const celle=e=>e.oreMancanti?`<span class="copertura-giorno manca">−${e.oreMancanti.toFixed(1)} h</span>`:e.oreAggiunte?`<span class="copertura-giorno extra">+${e.oreAggiunte.toFixed(1)} h</span>`:e.oreRichieste?'<span class="copertura-giorno ok">Coperta</span>':'<span class="copertura-giorno neutra">—</span>';
-  const body=reps.map(rep=>`<tr><td><b>${CONTROLLO_REPARTI_FASCE[rep]}</b></td>${risultati[rep].map(celle).map(x=>`<td>${x}</td>`).join('')}</tr>`).join('');
-  const el=document.getElementById('appalto-controlli');if(el)el.innerHTML=`<details class="cfg-section" open><summary>Copertura settimanale ${APPALTO_REPARTO==='Tutti'?'dei reparti':'— '+testoHtmlAppalto(APPALTO_REPARTO)}</summary><div class="cfg-body"><div class="tw"><table class="copertura-settimanale"><thead><tr><th>Reparto</th>${GIORNI.map(g=>`<th>${g.slice(0,3)}</th>`).join('')}</tr></thead><tbody>${body}</tbody></table></div></div></details>`;
+  const cellaOrtofrutta=v=>{if(v.necessarie==null)return v.programmate>0?`<span class="copertura-giorno neutra">${v.programmate.toFixed(1)} h prog.</span>`:'<span class="copertura-giorno neutra">—</span>';const differenza=v.programmate-v.necessarie;if(differenza>0.05)return `<span class="copertura-giorno extra">+${differenza.toFixed(1)} h</span>`;if(differenza<-0.05)return `<span class="copertura-giorno manca">−${Math.abs(differenza).toFixed(1)} h</span>`;return '<span class="copertura-giorno ok">Coperta</span>';};
+  const bodyOrtofrutta=mostraOrtofrutta?calcolaCoperturaSettimanaleOrtofrutta(righeSettimana).map(r=>`<tr><td><b>${r.nome}</b></td>${r.valori.map(v=>`<td>${cellaOrtofrutta(v)}</td>`).join('')}</tr>`).join(''):'';
+  const bodyReparti=reps.map(rep=>`<tr><td><b>${CONTROLLO_REPARTI_FASCE[rep]}</b></td>${risultati[rep].map(celle).map(x=>`<td>${x}</td>`).join('')}</tr>`).join('');
+  const el=document.getElementById('appalto-controlli');if(el)el.innerHTML=`<details class="cfg-section" open><summary>Copertura settimanale ${APPALTO_REPARTO==='Tutti'?'dei reparti':'— '+testoHtmlAppalto(APPALTO_REPARTO)}</summary><div class="cfg-body"><div class="tw"><table class="copertura-settimanale"><thead><tr><th>Reparto / attività</th>${GIORNI.map(g=>`<th>${g.slice(0,3)}</th>`).join('')}</tr></thead><tbody>${bodyOrtofrutta+bodyReparti}</tbody></table></div></div></details>`;
 }
 function apriEditorCellaSettimanale(idDipendente,giorno){
   const s=APPALTO_SETTIMANE[APPALTO_LUNEDI],d=DIPENDENTI.find(x=>String(x.ID_Dipendente)===String(idDipendente));if(!s||!d)return;EDITOR_SETTIMANA={idDipendente:Number(idDipendente),giorno:Number(giorno)};document.getElementById('editor-cella-settimana')?.remove();
