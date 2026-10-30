@@ -922,8 +922,13 @@ function importaPdfComeSettimana(lunedi){
   })));
   APPALTO_SETTIMANE[lunedi]={stato:'bozza',origine:'PDF settimana 38',righe};salvaSettimaneAppalto();return righe.length;
 }
+function lunediProssimaSettimana(ora=new Date()){
+  const parti=new Intl.DateTimeFormat('it-IT',{timeZone:'Europe/Rome',year:'numeric',month:'2-digit',day:'2-digit'}).formatToParts(ora),valore=tipo=>parti.find(p=>p.type===tipo).value;
+  const oggi=valore('year')+'-'+valore('month')+'-'+valore('day');
+  return addGiorni(lunediSettimana(oggi),7);
+}
 function renderProgrammazioneAppaltoTab(){
-  const oggi=new Date().toISOString().slice(0,10);APPALTO_LUNEDI=lunediSettimana(oggi);
+  APPALTO_LUNEDI=lunediProssimaSettimana();
   if(!APPALTO_SETTIMANE[APPALTO_LUNEDI]&&APPALTO_LUNEDI==='2026-09-14')importaPdfComeSettimana(APPALTO_LUNEDI);
   document.getElementById('mc').innerHTML=`<div class="card"><div class="ct">Programmazione dell'intero appalto</div>
     <div class="alert aok">Programmatore unico collegato a Supabase: ogni fascia appartiene alla persona, anche quando nella stessa giornata cambia reparto o attività. Le modifiche restano in bozza sul dispositivo fino a “Salva settimana”.</div>
@@ -1404,11 +1409,19 @@ function catalogoTurnoProgrammazione(turno){return turno?.id_catalogo_programmaz
 function rgbDaHex(hex){const s=String(hex||'#D3F0E3').replace('#','');return[parseInt(s.slice(0,2),16),parseInt(s.slice(2,4),16),parseInt(s.slice(4,6),16)];}
 function hexDaRgb(rgb){return'#'+rgb.map(n=>Math.max(0,Math.min(255,Math.round(n))).toString(16).padStart(2,'0')).join('').toUpperCase();}
 function miscelaColore(hex,verso,peso){const a=rgbDaHex(hex),b=verso==='nero'?[0,0,0]:[255,255,255];return hexDaRgb(a.map((n,i)=>n+(b[i]-n)*peso));}
-function contrastoColore(hex){const[r,g,b]=rgbDaHex(hex),lum=(r*299+g*587+b*114)/1000;return lum<135?'#FFFFFF':'#131313';}
+function contrastoColore(hex){
+  const luminanza=rgb=>rgb.map(n=>{const v=n/255;return v<=.04045?v/12.92:((v+.055)/1.055)**2.4;}).reduce((s,n,i)=>s+n*[.2126,.7152,.0722][i],0),lum=luminanza(rgbDaHex(hex));
+  if((lum+.05)/(luminanza([19,19,19])+.05)>=4.5)return'#131313';
+  return 1.05/(lum+.05)>=4.5?'#FFFFFF':'#000000';
+}
+function gradazioneFasciaOraria(base,fascia){
+  const rgb=rgbDaHex(base),lum=(Math.max(...rgb)+Math.min(...rgb))/510,obiettivo=({mattina:.90,pomeriggio:.68,sera:.45,notte:.22})[fascia]??.68;
+  return obiettivo>=lum?miscelaColore(base,'bianco',lum===1?0:(obiettivo-lum)/(1-lum)):miscelaColore(base,'nero',1-obiettivo/lum);
+}
 function coloreTurnoDaCatalogo(turno){
   const c=catalogoTurnoProgrammazione(turno);if(!c)return null;
   let hex=c.ColoreBase||'#D3F0E3';
-  if(c.GradazioneOraria){const fascia=fasciaOrariaColorePdf(turno.inizio),pesi={mattina:.48,pomeriggio:.32,sera:.18,notte:.04};hex=miscelaColore(hex,'bianco',pesi[fascia]??.2);}
+  if(c.GradazioneOraria)hex=gradazioneFasciaOraria(hex,fasciaOrariaColorePdf(turno.inizio));
   return{hex,rgb:rgbDaHex(hex),textHex:contrastoColore(hex),textRgb:rgbDaHex(contrastoColore(hex)),label:c.Nome||turno.attivita||''};
 }
 function repartoPrincipaleDipendente(id){return REPARTI_PRINCIPALI_CASSANO.get(String(id))||null;}
@@ -1466,8 +1479,8 @@ function personeVistaSettimanale(settimana){
   }).sort((a,b)=>a.Nome.localeCompare(b.Nome,'it',{sensitivity:'base'}));
 }
 function htmlTurnoSettimanale(r){
-  const stile=coloreTurnoDaCatalogo(r),base=stile||{hex:classeRepartoStampa(r.reparto)==='rep-ortofrutta'?'#DCFCE7':classeRepartoStampa(r.reparto)==='rep-carico'?'#FFEDD5':classeRepartoStampa(r.reparto)==='rep-lavaggio'?'#DBEAFE':classeRepartoStampa(r.reparto)==='rep-economia'?'#F3E8FF':classeRepartoStampa(r.reparto)==='rep-vuoti'?'#FEF3C7':classeRepartoStampa(r.reparto)==='rep-grocery'?'#CCFBF1':'#F3F4F6',textHex:'#131313'};
-  return `<div class="turno-settimanale" style="background:${base.hex};color:${base.textHex}" title="${testoHtmlAppalto(r.reparto)} — ${testoHtmlAppalto(r.attivita)}"><b>${r.inizio||'—'}–${r.fine||'—'}</b><span>${testoHtmlAppalto(r.reparto)}${r.attivita?' · '+testoHtmlAppalto(r.attivita):''}</span></div>`;
+  const stile=stileColoreTurnoPdf(r,categoriaDirettaPdfTurno(r)),base=stile||{hex:classeRepartoStampa(r.reparto)==='rep-ortofrutta'?'#DCFCE7':classeRepartoStampa(r.reparto)==='rep-carico'?'#FFEDD5':classeRepartoStampa(r.reparto)==='rep-lavaggio'?'#DBEAFE':classeRepartoStampa(r.reparto)==='rep-economia'?'#F3E8FF':classeRepartoStampa(r.reparto)==='rep-vuoti'?'#FEF3C7':classeRepartoStampa(r.reparto)==='rep-grocery'?'#CCFBF1':'#F3F4F6',textHex:'#131313'};
+  return `<div class="turno-settimanale" style="background:${base.hex};color:${base.textHex||'#131313'}" title="${testoHtmlAppalto(r.reparto)} — ${testoHtmlAppalto(r.attivita)}"><b>${r.inizio||'—'}–${r.fine||'—'}</b><span>${testoHtmlAppalto(r.reparto)}${r.attivita?' · '+testoHtmlAppalto(r.attivita):''}</span></div>`;
 }
 function renderVistaSettimanaleAppalto(settimana){
   const persone=personeVistaSettimanale(settimana),giorni=[...Array(7)].map((_,i)=>({i,data:addGiorni(APPALTO_LUNEDI,i)}));
@@ -2034,10 +2047,10 @@ const COLORI_ATTIVITA_PDF=[
   {hex:'#e0e7ff',rgb:[224,231,255]}
 ];
 const COLORI_FASCE_PDF={
-  mattina:{label:'Mattina',hex:'#dbeafe',rgb:[219,234,254]},
-  pomeriggio:{label:'Pomeriggio',hex:'#fef3c7',rgb:[254,243,199]},
-  sera:{label:'Sera',hex:'#f3e8ff',rgb:[243,232,255]},
-  notte:{label:'Notte',hex:'#e0e7ff',rgb:[224,231,255]}
+  mattina:{label:'Mattina',hex:'#BAE6FD',rgb:[186,230,253],textHex:'#131313',textRgb:[19,19,19]},
+  pomeriggio:{label:'Pomeriggio',hex:'#FBBF24',rgb:[251,191,36],textHex:'#131313',textRgb:[19,19,19]},
+  sera:{label:'Sera',hex:'#C084FC',rgb:[192,132,252],textHex:'#131313',textRgb:[19,19,19]},
+  notte:{label:'Notte',hex:'#312E81',rgb:[49,46,129],textHex:'#FFFFFF',textRgb:[255,255,255]}
 };
 function usaColoriDettaglioPdf(categoria){return['vuoti','grocery','forno','lavaggio'].includes(categoria);}
 function indiceColoreAttivitaPdf(testo){
