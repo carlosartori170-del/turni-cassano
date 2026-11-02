@@ -1191,7 +1191,7 @@ function assenzaGruppoReplica(righePersona,giornoDestinazione){
   return APPALTO_ASSENZE.get(chiaveAssenza(persona.id_dipendente,dataIngresso))||null;
 }
 async function apriReplicaSelezionati(){
-  if(APPALTO_VISTA_SETTIMANA){await apriCopiaSettimanaDipendente();return;}
+  if(APPALTO_VISTA_SETTIMANA){toast('Scegli il destinatario e i giorni nel riquadro sotto la persona selezionata.','warn');return;}
   let righe=righeReplicaSelezionate();if(!righe.length){toast('Seleziona almeno un turno da replicare.','warn');return;}
   if(!APPALTO_ASSENZE_VERIFICATE){toast('Verifica ferie e assenze in corso…','warn');await controllaAssenzeAppalto(true);if(!APPALTO_ASSENZE_VERIFICATE){toast('Impossibile verificare ferie e assenze: replica non eseguita.','err');return;}}
   righe=righeReplicaSelezionate();if(!righe.length){toast('I turni selezionati risultano assenti o in ferie e non possono essere replicati.','warn');return;}
@@ -1226,12 +1226,13 @@ async function apriCopiaSettimanaDipendente(){
   document.body.insertAdjacentHTML('beforeend',`<div id="copia-settimana-dipendente-overlay" class="replica-overlay" role="dialog" aria-modal="true" onclick="if(event.target===this)chiudiCopiaSettimanaDipendente()"><div class="replica-card" style="max-height:calc(100vh - 40px);overflow:auto"><h3>Copia la settimana su un altro dipendente</h3><p>Turni sorgente: <b>${testoHtmlAppalto(fonte.Nome)}</b> · ${righeFonte.length} fasce o riposi</p><div class="alert awarn">Scegli il dipendente e i giorni da copiare. Solo nei giorni selezionati, eventuali turni già presenti del destinatario saranno sostituiti.</div><div class="fg" style="margin-top:12px"><label>Cerca dipendente destinatario</label><input type="search" placeholder="Nome o cognome" oninput="filtraDestinatariCopiaSettimana(this.value)"></div><div class="fg" style="margin-top:10px"><label>Dipendente destinatario</label><select id="copia-settimana-destinatario">${opzioniDestinatariCopiaSettimana(idFonte)}</select></div><div class="fg" style="margin-top:12px"><label>Giorni da copiare</label><div id="copia-settimana-giorni" class="replica-giorni">${giorniHtml}</div></div><div class="brow" style="justify-content:flex-end;margin-top:16px"><button class="btn bo" type="button" onclick="chiudiCopiaSettimanaDipendente()">Annulla</button><button class="btn bv" type="button" onclick="confermaCopiaSettimanaDipendente()">Copia i giorni selezionati</button></div></div></div>`);
 }
 function chiudiCopiaSettimanaDipendente(){document.getElementById('copia-settimana-dipendente-overlay')?.remove();}
-function confermaCopiaSettimanaDipendente(){
+async function confermaCopiaSettimanaDipendente(){
   const s=APPALTO_SETTIMANE[APPALTO_LUNEDI],idFonte=[...APPALTO_PERSONE_REPLICA_SETTIMANA][0],idDestinazione=document.getElementById('copia-settimana-destinatario')?.value;
   const fonte=DIPENDENTI.find(d=>String(d.ID_Dipendente)===String(idFonte)),destinatario=DIPENDENTI.find(d=>String(d.ID_Dipendente)===String(idDestinazione));
   const giorniScelti=[...document.querySelectorAll('#copia-settimana-giorni input:checked')].map(x=>Number(x.value));
-  if(!s||!fonte||!destinatario){toast('Seleziona il dipendente destinatario.','warn');return;}
+  if(!s||!fonte||!destinatario){toast('Scegli il dipendente destinatario.','warn');return;}
   if(!giorniScelti.length){toast('Seleziona almeno un giorno da copiare.','warn');return;}
+  if(!APPALTO_ASSENZE_VERIFICATE){toast('Verifica ferie e assenze in corso…','warn');await controllaAssenzeAppalto(true);if(!APPALTO_ASSENZE_VERIFICATE){toast('Impossibile verificare ferie e assenze: copia non eseguita.','err');return;}}
   const giorniAssenza=[],giorniCopiabili=[];giorniScelti.forEach(g=>{if(APPALTO_ASSENZE.has(chiaveAssenza(destinatario.ID_Dipendente,addGiorni(APPALTO_LUNEDI,g))))giorniAssenza.push(g);else giorniCopiabili.push(g);});
   if(!giorniCopiabili.length){toast(destinatario.Nome+' risulta assente nei giorni selezionati. Nessun turno copiato.','warn');return;}
   const esistenti=s.righe.filter(r=>String(r.id_dipendente)===String(destinatario.ID_Dipendente)&&giorniCopiabili.includes(Number(r.giorno)));
@@ -1622,11 +1623,13 @@ function renderVistaSettimanaleAppalto(settimana){
   const testa=giorni.map(g=>`<th>${GIORNI[g.i].slice(0,3)}<br><small>${fmtDataIt(g.data)}</small></th>`).join('');
   const righe=persone.map(d=>{
     const rep=REPARTI.find(r=>Number(r.ID_Reparto)===Number(repartoPrincipaleDipendente(d.ID_Dipendente))),selezionata=APPALTO_PERSONE_REPLICA_SETTIMANA.has(String(d.ID_Dipendente));
-    const selettore=APPALTO_MODALITA_REPLICA?`<label class="selezione-settimana-persona" onclick="event.stopPropagation()"><input type="checkbox" ${selezionata?'checked':''} onchange="togglePersonaReplicaSettimanale('${d.ID_Dipendente}',this.checked)"> Seleziona settimana</label>${selezionata?`<button class="btn bv bsm" type="button" style="margin-top:6px" onclick="event.stopPropagation();apriCopiaSettimanaDipendente()">↻ Copia questa settimana</button>`:''}`:'';
+    const giorniCopia=GIORNI.map((g,i)=>`<label style="display:inline-flex;align-items:center;gap:3px;margin:3px 6px 3px 0;font-size:.67rem"><input type="checkbox" value="${i}" checked> ${g.slice(0,3)}</label>`).join('');
+    const pannelloCopia=selezionata?`<div class="alert aok" style="margin:7px 0 0;padding:8px" onclick="event.stopPropagation()"><b style="font-size:.72rem">Copia la settimana su:</b><select id="copia-settimana-destinatario" style="width:100%;margin:5px 0">${opzioniDestinatariCopiaSettimana(d.ID_Dipendente)}</select><div id="copia-settimana-giorni">${giorniCopia}</div><button class="btn bv bsm" type="button" style="margin-top:5px" onclick="event.stopPropagation();confermaCopiaSettimanaDipendente()">↻ Copia i giorni selezionati</button></div>`:'';
+    const selettore=APPALTO_MODALITA_REPLICA?`<label class="selezione-settimana-persona" onclick="event.stopPropagation()"><input type="checkbox" ${selezionata?'checked':''} onchange="togglePersonaReplicaSettimanale('${d.ID_Dipendente}',this.checked)"> Seleziona settimana</label>${pannelloCopia}`:'';
     const celle=giorni.map(g=>{const ass=APPALTO_ASSENZE.get(chiaveAssenza(d.ID_Dipendente,g.data)),turni=(settimana.righe||[]).filter(r=>Number(r.giorno)===g.i&&String(r.id_dipendente)===String(d.ID_Dipendente)),riposo=turni.some(r=>r.tipo==='riposo'),validi=ordinaTurniCronologicamenteCella(turni.filter(r=>r.tipo!=='riposo'));let contenuto='';if(ass)contenuto='<div class="cella-settimana-stato assente">ASSENTE</div>';else if(riposo)contenuto='<div class="cella-settimana-stato riposo">RIPOSO</div>';else contenuto=validi.map(htmlTurnoSettimanale).join('')||'<span class="cella-vuota">＋</span>';return `<td class="cella-giorno-settimana" onclick="gestisciClickCellaSettimanale(${d.ID_Dipendente},${g.i})">${contenuto}</td>`;}).join('');
     return `<tr data-persona-settimana="${d.ID_Dipendente}" class="${selezionata?'riga-settimana-selezionata':''}"><td class="persona-settimana"><b>${testoHtmlAppalto(d.Nome)}</b>${rep?`<small>${testoHtmlAppalto(nomeReparto(rep))}</small>`:'<small>Reparto da assegnare</small>'}${selettore}</td>${celle}</tr>`;
   }).join('');
-  const istruzione=APPALTO_MODALITA_REPLICA?'Seleziona la riga della persona sorgente, poi premi “Copia questa settimana” sotto il suo nome.':'Clicca una cella per inserire, modificare o eliminare le fasce della giornata.';
+  const istruzione=APPALTO_MODALITA_REPLICA?'Seleziona la riga della persona sorgente, poi scegli il destinatario e i giorni sotto il suo nome.':'Clicca una cella per inserire, modificare o eliminare le fasce della giornata.';
   return `<div class="vista-settimanale-intro"><b>Programmazione settimanale</b><span>${istruzione}</span></div><div class="tw griglia-settimanale-wrap"><table class="griglia-settimanale"><thead><tr><th>Persona</th>${testa}</tr></thead><tbody>${righe||'<tr><td colspan="8" class="empty">Nessuna persona corrisponde ai filtri selezionati.</td></tr>'}</tbody></table></div>`;
 }
 function calcolaCoperturaSettimanaleOrtofrutta(righeSettimana){
