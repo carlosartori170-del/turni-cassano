@@ -884,23 +884,70 @@ function turnoConRepartoAttivitaValido(r){
   if(r.id_attivita){const a=ATTIVITA_TUTTE.find(x=>String(x.ID_Attivita)===String(r.id_attivita));return!!a&&String(a.ID_Reparto)===String(r.id_reparto);}
   const c=CATALOGO_PROGRAMMAZIONE_CASSANO.find(x=>String(x.ID)===String(r.id_catalogo_programmazione));return!!c&&c.Attiva&&String(c.ID_Reparto)===String(r.id_reparto);
 }
-async function salvaSettimanaSupabase(){
-  const settimana=APPALTO_SETTIMANE[APPALTO_LUNEDI];if(!settimana){toast('Prima crea la settimana.','warn');return;}
-  if(!SESSIONE_CASSANO||!projectIdValido()){toast('Sessione Supabase non valida.','err');return;}
+function rigaPianificataDaSupabase(t){
+  return {uid:t.UID,giorno:Number(t.GiornoIndice),nome:t.NomeOrigine||'',id_dipendente:t.ID_Dipendente,reparto:t.RepartoOrigine||'',id_reparto:t.ID_Reparto,attivita:t.AttivitaOrigine||'',id_attivita:t.ID_Attivita,id_catalogo_programmazione:t.ID_CatalogoProgrammazione||null,origine_nome:t.NomeOrigine||'',origine_reparto:t.RepartoOrigine||'',origine_attivita:t.AttivitaOrigine||'',inizio:t.OraInizio?String(t.OraInizio).slice(0,5):'',fine:t.OraFine?String(t.OraFine).slice(0,5):'',tipo:t.Tipo||'standard',sostituisce:t.UIDSostituito||undefined,note:t.Note||''};
+}
+async function salvaSettimanaSupabase(motivoStorico='salvataggio settimana'){
+  const settimana=APPALTO_SETTIMANE[APPALTO_LUNEDI];if(!settimana){toast('Prima crea la settimana.','warn');return false;}
+  if(!SESSIONE_CASSANO||!projectIdValido()){toast('Sessione Supabase non valida.','err');return false;}
   normalizzaRighePlanner(settimana);
   const incompatibili=(settimana.righe||[]).filter(r=>!turnoConRepartoAttivitaValido(r));
-  if(incompatibili.length){statoSync('Salvataggio bloccato');toast(`Salvataggio bloccato: ${incompatibili.length} fasce hanno un'attività non compatibile con il reparto. Correggile prima di salvare.`,'err');return;}
-  statoSync('Salvataggio settimana…');
+  if(incompatibili.length){statoSync('Salvataggio bloccato');toast(`Salvataggio bloccato: ${incompatibili.length} fasce hanno un'attività non compatibile con il reparto. Correggile prima di salvare.`,'err');return false;}
+  statoSync('Creazione copia di sicurezza…');
   const ora=new Date().toISOString(),utente=SESSIONE_CASSANO.user.id,origine=(settimana.origine||'').match(/\d{4}-\d{2}-\d{2}/)?.[0]||null;
+  const[{data:testataPrecedente,error:eStoricoTestata},{data:righePrecedenti,error:eStoricoRighe}]=await Promise.all([
+    sb.from('SettimaneCassano').select('*').eq('Lunedi',APPALTO_LUNEDI).maybeSingle(),
+    sb.from('TurniCassanoPianificati').select('*').eq('Settimana',APPALTO_LUNEDI)
+  ]);
+  if(eStoricoTestata||eStoricoRighe){statoSync('Salvataggio bloccato');toast('Impossibile creare la copia di sicurezza: '+(eStoricoTestata||eStoricoRighe).message,'err');return false;}
+  if(testataPrecedente||(righePrecedenti||[]).length){
+    const{error:eStorico}=await sb.from('StoricoSettimaneCassano').insert({
+      Settimana:APPALTO_LUNEDI,
+      Motivo:motivoStorico,
+      NumeroRighe:(righePrecedenti||[]).length,
+      Dati:{testata:testataPrecedente||null,righe:righePrecedenti||[]}
+    });
+    if(eStorico){statoSync('Salvataggio bloccato');toast('Copia di sicurezza non creata: '+eStorico.message+'. Nessun turno è stato modificato.','err');return false;}
+  }
+  statoSync('Salvataggio settimana…');
   const{error:e1}=await sb.from('SettimaneCassano').upsert({Lunedi:APPALTO_LUNEDI,ID_Magazzino:ID_MAGAZZINO_CASSANO,Stato:settimana.stato||'bozza',OrigineLunedi:origine,AggiornatoIl:ora,AggiornatoDa:utente},{onConflict:'Lunedi'});
-  if(e1){statoSync('Errore di salvataggio');toast('Settimana non salvata: '+e1.message,'err');return;}
+  if(e1){statoSync('Errore di salvataggio');toast('Settimana non salvata: '+e1.message,'err');return false;}
   const righe=(settimana.righe||[]).map(r=>({UID:r.uid,Settimana:APPALTO_LUNEDI,GiornoIndice:Number(r.giorno),ID_Dipendente:r.id_dipendente?Number(r.id_dipendente):null,NomeOrigine:r.origine_nome||r.nome||null,ID_Reparto:r.id_reparto?Number(r.id_reparto):null,RepartoOrigine:r.origine_reparto||r.reparto||null,ID_Attivita:r.id_attivita?Number(r.id_attivita):null,ID_CatalogoProgrammazione:r.id_catalogo_programmazione||null,AttivitaOrigine:r.origine_attivita||r.attivita||null,OraInizio:r.inizio||null,OraFine:r.fine||null,Tipo:r.tipo||'standard',UIDSostituito:r.sostituisce||null,Note:r.note||null,AggiornatoIl:ora,AggiornatoDa:utente}));
-  if(righe.length){const{error}=await sb.from('TurniCassanoPianificati').upsert(righe,{onConflict:'UID'});if(error){statoSync('Salvataggio parziale');toast('Testata salvata, ma turni non salvati: '+error.message,'err');return;}}
+  if(righe.length){const{error}=await sb.from('TurniCassanoPianificati').upsert(righe,{onConflict:'UID'});if(error){statoSync('Salvataggio parziale');toast('Testata salvata, ma turni non salvati: '+error.message,'err');return false;}}
   const{data:esistenti,error:e2}=await sb.from('TurniCassanoPianificati').select('UID').eq('Settimana',APPALTO_LUNEDI);
-  if(e2){statoSync('Verifica incompleta');toast('Settimana salvata, verifica righe fallita: '+e2.message,'warn');return;}
+  if(e2){statoSync('Verifica incompleta');toast('Settimana salvata, verifica righe fallita: '+e2.message,'warn');return false;}
   const attuali=new Set(righe.map(r=>r.UID)),daEliminare=(esistenti||[]).map(x=>x.UID).filter(x=>!attuali.has(x));
-  if(daEliminare.length){const{error}=await sb.from('TurniCassanoPianificati').delete().in('UID',daEliminare);if(error){statoSync('Pulizia incompleta');toast('Turni salvati, ma alcune righe eliminate sono rimaste: '+error.message,'warn');return;}}
-  statoSync('Salvata '+APPALTO_LUNEDI);toast('Settimana salvata su Supabase.');
+  if(daEliminare.length){const{error}=await sb.from('TurniCassanoPianificati').delete().in('UID',daEliminare);if(error){statoSync('Pulizia incompleta');toast('Turni salvati, ma alcune righe eliminate sono rimaste: '+error.message,'warn');return false;}}
+  statoSync('Salvata '+APPALTO_LUNEDI);toast('Settimana salvata su Supabase.');return true;
+}
+function chiudiStoricoSettimana(){const overlay=document.getElementById('storico-settimana-overlay');if(overlay)overlay.style.display='none';}
+async function apriStoricoSettimana(){
+  if(!SESSIONE_CASSANO||!projectIdValido()){toast('Sessione Supabase non valida.','err');return;}
+  let overlay=document.getElementById('storico-settimana-overlay');
+  if(!overlay){
+    document.body.insertAdjacentHTML('beforeend',`<div id="storico-settimana-overlay" class="replica-overlay" role="dialog" aria-modal="true" aria-labelledby="storico-settimana-titolo"><div class="replica-card"><h3 id="storico-settimana-titolo">Storico della settimana</h3><p id="storico-settimana-descrizione"></p><div id="storico-settimana-elenco"></div><div class="brow" style="justify-content:flex-end"><button class="btn bo" type="button" onclick="chiudiStoricoSettimana()">Chiudi</button></div></div></div>`);
+    overlay=document.getElementById('storico-settimana-overlay');overlay.addEventListener('click',e=>{if(e.target===overlay)chiudiStoricoSettimana();});
+  }
+  document.getElementById('storico-settimana-descrizione').textContent='Caricamento delle copie salvate…';
+  document.getElementById('storico-settimana-elenco').innerHTML='';
+  overlay.style.display='flex';
+  const{data,error}=await sb.from('StoricoSettimaneCassano').select('ID_Storico,SalvatoIl,SalvatoDa,Motivo,NumeroRighe').eq('Settimana',APPALTO_LUNEDI).order('SalvatoIl',{ascending:false}).limit(100);
+  if(error){document.getElementById('storico-settimana-descrizione').textContent='Storico non disponibile: '+error.message;return;}
+  const versioni=data||[];
+  document.getElementById('storico-settimana-descrizione').textContent=versioni.length?`Sono disponibili ${versioni.length} copie precedenti. Il ripristino crea prima una nuova copia dell’attuale settimana.`:'Non esistono ancora copie precedenti per questa settimana.';
+  document.getElementById('storico-settimana-elenco').innerHTML=versioni.map(v=>`<div class="alert aok" style="display:flex;align-items:center;justify-content:space-between;gap:10px;margin:8px 0"><span><b>${testoHtmlAppalto(new Date(v.SalvatoIl).toLocaleString('it-IT',{dateStyle:'short',timeStyle:'short'}))}</b><br><small>${testoHtmlAppalto(v.Motivo||'salvataggio settimana')} · ${Number(v.NumeroRighe||0)} righe</small></span><button class="btn bv bsm" type="button" onclick="ripristinaVersioneSettimana('${v.ID_Storico}')">Ripristina</button></div>`).join('');
+}
+async function ripristinaVersioneSettimana(idStorico){
+  if(!confirm('Ripristinare questa versione della settimana? La versione attuale verrà archiviata prima della sostituzione.'))return;
+  const{data,error}=await sb.from('StoricoSettimaneCassano').select('Dati,SalvatoIl,NumeroRighe').eq('ID_Storico',idStorico).maybeSingle();
+  if(error||!data){toast('Versione non disponibile: '+(error?.message||'non trovata'),'err');return;}
+  const dati=data.Dati||{},testata=dati.testata||{};
+  if(!Array.isArray(dati.righe)){toast('La copia selezionata non contiene righe ripristinabili.','err');return;}
+  APPALTO_SETTIMANE[APPALTO_LUNEDI]={stato:testata.Stato||'bozza',origine:testata.OrigineLunedi?'Settimana precedente '+testata.OrigineLunedi:'Ripristino storico',righe:dati.righe.map(rigaPianificataDaSupabase)};
+  normalizzaRighePlanner(APPALTO_SETTIMANE[APPALTO_LUNEDI]);salvaSettimaneAppalto();
+  const ok=await salvaSettimanaSupabase('ripristino versione del '+new Date(data.SalvatoIl).toLocaleString('it-IT',{dateStyle:'short',timeStyle:'short'}));
+  if(!ok)return;
+  chiudiStoricoSettimana();renderCorpoAppalto();toast('Versione ripristinata e salvata su Supabase.');
 }
 function normalizzaNomePlanner(s){return String(s||'').replace(/\([^)]*\)/g,' ').normalize('NFD').replace(/[\u0300-\u036f]/g,'').replace(/[^a-zA-Z0-9]+/g,' ').trim().toLowerCase();}
 function collegaDipendentePlanner(nome){
@@ -951,7 +998,7 @@ function renderProgrammazioneAppaltoTab(){
   document.getElementById('mc').innerHTML=`<div class="card"><div class="ct">Programmazione dell'intero appalto</div>
     <div class="alert aok">Programmatore unico collegato a Supabase: ogni fascia appartiene alla persona, anche quando nella stessa giornata cambia reparto o attività. Le modifiche restano in bozza sul dispositivo fino a “Salva settimana”.</div>
     <div class="g2 no-print" style="max-width:520px;"><div class="fg"><label>Lunedì della settimana</label><input type="date" id="appalto-lun" value="${APPALTO_LUNEDI}" onchange="caricaSettimanaAppalto(this.value)"></div><div class="fg"><label>Reparto</label><select id="appalto-rep" onchange="APPALTO_REPARTO=this.value;renderCorpoAppalto()"></select></div></div>
-    <div class="brow no-print"><button class="btn bv bsm" onclick="salvaSettimanaSupabase()">💾 Salva settimana</button><button class="btn bp bsm" onclick="creaDaSettimanaPrecedente()">↪ Crea dalla settimana precedente</button><button class="btn bo bsm" onclick="aggiungiFasciaAppalto()">＋ Aggiungi fascia</button><button id="appalto-seleziona-replica" class="btn bo bsm" onclick="toggleSelezioneReplica()">☑ Seleziona turni</button><button id="appalto-seleziona-filtrati" class="btn bo bsm" style="display:none" onclick="toggleReplicaFiltrati()">☑ Seleziona tutti i filtrati</button><button id="appalto-conferma-replica" class="btn bv bsm" style="display:none" onclick="apriReplicaSelezionati()">↻ Replica selezionati (0)</button><button class="btn bo bsm" onclick="ordinaNominativiAppalto()">A–Z Riordina nominativi</button><button class="btn bo bsm" onclick="controllaAssenzeAppalto()">🔎 Controlla assenze Nexus</button><button class="btn bo bsm" onclick="APPALTO_SOLO_ASSENTI=!APPALTO_SOLO_ASSENTI;renderCorpoAppalto()">Solo da sostituire</button><button class="btn bo bsm" onclick="APPALTO_VISTA_PERSONE=!APPALTO_VISTA_PERSONE;renderCorpoAppalto()">Vista persone/reparto</button><button id="toggle-vista-settimana" class="btn bv bsm" onclick="toggleVistaProgrammazioneAppalto()">▦ Vista settimanale / giornaliera</button><button class="btn bo bsm" onclick="apriAnteprimaTurniAppalto()">📄 Anteprima / PDF</button><button class="btn bo bsm" onclick="apriAnteprimaTurniReparti()">📚 PDF per reparti</button></div>
+    <div class="brow no-print"><button class="btn bv bsm" onclick="salvaSettimanaSupabase()">💾 Salva settimana</button><button class="btn bo bsm" onclick="apriStoricoSettimana()">🕘 Storico / ripristina</button><button class="btn bp bsm" onclick="creaDaSettimanaPrecedente()">↪ Crea dalla settimana precedente</button><button class="btn bo bsm" onclick="aggiungiFasciaAppalto()">＋ Aggiungi fascia</button><button id="appalto-seleziona-replica" class="btn bo bsm" onclick="toggleSelezioneReplica()">☑ Seleziona turni</button><button id="appalto-seleziona-filtrati" class="btn bo bsm" style="display:none" onclick="toggleReplicaFiltrati()">☑ Seleziona tutti i filtrati</button><button id="appalto-conferma-replica" class="btn bv bsm" style="display:none" onclick="apriReplicaSelezionati()">↻ Replica selezionati (0)</button><button class="btn bo bsm" onclick="ordinaNominativiAppalto()">A–Z Riordina nominativi</button><button class="btn bo bsm" onclick="controllaAssenzeAppalto()">🔎 Controlla assenze Nexus</button><button class="btn bo bsm" onclick="APPALTO_SOLO_ASSENTI=!APPALTO_SOLO_ASSENTI;renderCorpoAppalto()">Solo da sostituire</button><button class="btn bo bsm" onclick="APPALTO_VISTA_PERSONE=!APPALTO_VISTA_PERSONE;renderCorpoAppalto()">Vista persone/reparto</button><button id="toggle-vista-settimana" class="btn bv bsm" onclick="toggleVistaProgrammazioneAppalto()">▦ Vista settimanale / giornaliera</button><button class="btn bo bsm" onclick="apriAnteprimaTurniAppalto()">📄 Anteprima / PDF</button><button class="btn bo bsm" onclick="apriAnteprimaTurniReparti()">📚 PDF per reparti</button></div>
     <div id="appalto-msg"></div><div id="appalto-tabs"></div><div id="appalto-of"></div><div id="appalto-controlli"></div><div id="appalto-filtri"></div><div id="appalto-personale"></div><div id="appalto-body"></div></div>`;
   caricaSettimanaAppalto(APPALTO_LUNEDI);
 }
