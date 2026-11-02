@@ -1167,8 +1167,8 @@ async function apriCopiaSettimanaDipendente(){
   if(APPALTO_PERSONE_REPLICA_SETTIMANA.size!==1){toast('Seleziona una sola persona di cui copiare la settimana.','warn');return;}
   if(!APPALTO_ASSENZE_VERIFICATE){toast('Verifica ferie e assenze in corso…','warn');await controllaAssenzeAppalto(true);if(!APPALTO_ASSENZE_VERIFICATE){toast('Impossibile verificare ferie e assenze: copia non eseguita.','err');return;}}
   const idFonte=[...APPALTO_PERSONE_REPLICA_SETTIMANA][0],fonte=DIPENDENTI.find(d=>String(d.ID_Dipendente)===String(idFonte)),s=APPALTO_SETTIMANE[APPALTO_LUNEDI];
-  const righeFonte=(s?.righe||[]).filter(r=>String(r.id_dipendente)===String(idFonte)&&(r.tipo==='riposo'||(r.tipo==='standard'&&!turnoAssente(r))));
-  if(!fonte||!righeFonte.length){toast('La persona selezionata non ha turni o riposi copiabili in questa settimana.','warn');return;}
+  const righeFonte=(s?.righe||[]).filter(r=>String(r.id_dipendente)===String(idFonte)&&['standard','sostituzione','riposo'].includes(r.tipo));
+  if(!fonte||!righeFonte.length){toast('La persona selezionata non ha fasce o riposi programmati in questa settimana.','warn');return;}
   document.getElementById('copia-settimana-dipendente-overlay')?.remove();
   document.body.insertAdjacentHTML('beforeend',`<div id="copia-settimana-dipendente-overlay" class="replica-overlay" role="dialog" aria-modal="true" onclick="if(event.target===this)chiudiCopiaSettimanaDipendente()"><div class="replica-card"><h3>Copia l’intera settimana</h3><p>Turno sorgente: <b>${testoHtmlAppalto(fonte.Nome)}</b></p><div class="alert awarn">Nei giorni senza assenze del destinatario, i turni e i riposi già presenti saranno sostituiti con quelli della persona sorgente.</div><div class="fg" style="margin-top:12px"><label>Cerca dipendente destinatario</label><input type="search" placeholder="Nome o cognome" oninput="filtraDestinatariCopiaSettimana(this.value)"></div><div class="fg" style="margin-top:10px"><label>Dipendente destinatario</label><select id="copia-settimana-destinatario">${opzioniDestinatariCopiaSettimana(idFonte)}</select></div><div class="brow" style="justify-content:flex-end;margin-top:16px"><button class="btn bo" type="button" onclick="chiudiCopiaSettimanaDipendente()">Annulla</button><button class="btn bv" type="button" onclick="confermaCopiaSettimanaDipendente()">Copia settimana</button></div></div></div>`);
 }
@@ -1185,8 +1185,8 @@ function confermaCopiaSettimanaDipendente(){
   giorniCopiabili.forEach(g=>{
     const daRimuovere=s.righe.filter(r=>Number(r.giorno)===g&&String(r.id_dipendente)===String(destinatario.ID_Dipendente)),uidDaRimuovere=new Set(daRimuovere.map(r=>r.uid));rimosse+=daRimuovere.length;
     s.righe=s.righe.filter(r=>!uidDaRimuovere.has(r.uid)&&!uidDaRimuovere.has(r.sostituisce));
-    const fonteGiorno=s.righe.filter(r=>Number(r.giorno)===g&&String(r.id_dipendente)===String(fonte.ID_Dipendente)&&(r.tipo==='riposo'||(r.tipo==='standard'&&!turnoAssente(r))));
-    fonteGiorno.forEach((r,i)=>{s.righe.push({...structuredClone(r),uid:(r.tipo==='riposo'?'riposo-':'std-')+Date.now()+'-'+g+'-'+i+'-'+Math.random().toString(36).slice(2,6),nome:destinatario.Nome,id_dipendente:destinatario.ID_Dipendente,origine_nome:destinatario.Nome,sostituisce:undefined});aggiunte++;});
+    const fonteGiorno=s.righe.filter(r=>Number(r.giorno)===g&&String(r.id_dipendente)===String(fonte.ID_Dipendente)&&['standard','sostituzione','riposo'].includes(r.tipo));
+    fonteGiorno.forEach((r,i)=>{s.righe.push({...structuredClone(r),uid:(r.tipo==='riposo'?'riposo-':'std-')+Date.now()+'-'+g+'-'+i+'-'+Math.random().toString(36).slice(2,6),nome:destinatario.Nome,id_dipendente:destinatario.ID_Dipendente,origine_nome:destinatario.Nome,tipo:r.tipo==='riposo'?'riposo':'standard',sostituisce:undefined});aggiunte++;});
   });
   salvaSettimaneAppalto();chiudiCopiaSettimanaDipendente();APPALTO_MODALITA_REPLICA=false;APPALTO_PERSONE_REPLICA_SETTIMANA.clear();APPALTO_RIGHE_REPLICA.clear();renderCorpoAppalto();
   const note=[`Settimana di ${fonte.Nome} copiata a ${destinatario.Nome}`,aggiunte+' fasce o riposi copiati'];if(rimosse)note.push(rimosse+' righe precedenti sostituite');if(giorniAssenza.length)note.push('giorni lasciati invariati per assenza: '+giorniAssenza.map(g=>GIORNI[g]).join(', '));toast(note.join(' · '),giorniAssenza.length?'warn':undefined);
