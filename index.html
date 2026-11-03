@@ -815,7 +815,16 @@ function renderCorpoTurniPdf(){
 
 const APPALTO_STORAGE_KEY='nexus_programmazione_appalto_locale_v1';
 const APPALTO_MAPPING_KEY='nexus_mappature_appalto_locale_v1';
+const APPALTO_BOZZE_META_KEY='nexus_programmazione_appalto_bozze_meta_v1';
+const APPALTO_UNDO_KEY='nexus_programmazione_appalto_undo_v1';
+const APPALTO_AUTOSAVE_ATTESA=25000;
 let APPALTO_SETTIMANE=caricaSettimaneAppalto();
+let APPALTO_BOZZE_META=caricaBozzeMetaAppalto();
+let APPALTO_UNDO=caricaUndoAppalto();
+let APPALTO_VERSIONI_REMOTE=new Map();
+let APPALTO_AUTOSAVE_TIMER=null;
+let APPALTO_SALVATAGGIO_IN_CORSO=false;
+let APPALTO_SALVATAGGIO_STATO='Nessuna modifica da salvare';
 let APPALTO_MAPPING=caricaMappatureAppalto();
 let APPALTO_LUNEDI='';
 let APPALTO_GIORNO=0;
@@ -838,7 +847,31 @@ let APPALTO_FILTRO_ATTIVITA='';
 let APPALTO_OF_DATA={previsioni:{},obiettivi:{},percLegaggio:0,percNavetta:0,caricato:false};
 
 function caricaSettimaneAppalto(){try{return JSON.parse(localStorage.getItem(APPALTO_STORAGE_KEY)||'{}');}catch(_){return{};}}
-function salvaSettimaneAppalto(){localStorage.setItem(APPALTO_STORAGE_KEY,JSON.stringify(APPALTO_SETTIMANE));}
+function caricaBozzeMetaAppalto(){try{return JSON.parse(localStorage.getItem(APPALTO_BOZZE_META_KEY)||'{}');}catch(_){return{};}}
+function caricaUndoAppalto(){try{const dati=JSON.parse(localStorage.getItem(APPALTO_UNDO_KEY)||'[]');return Array.isArray(dati)?dati:[];}catch(_){return[];}}
+function aggiornaStatoAutosaveAppalto(testo){APPALTO_SALVATAGGIO_STATO=testo;const el=document.getElementById('appalto-autosalvataggio');if(el)el.textContent=testo;const btn=document.getElementById('appalto-annulla');if(btn)btn.disabled=!APPALTO_UNDO.length;}
+function salvaSettimaneAppalto(opzioni={}){
+  const precedente=localStorage.getItem(APPALTO_STORAGE_KEY)||'{}',attuale=JSON.stringify(APPALTO_SETTIMANE);
+  if(precedente!==attuale&&!opzioni.silenzioso){
+    try{APPALTO_UNDO.push(JSON.parse(precedente));if(APPALTO_UNDO.length>20)APPALTO_UNDO.shift();localStorage.setItem(APPALTO_UNDO_KEY,JSON.stringify(APPALTO_UNDO));}catch(_){}
+    if(APPALTO_LUNEDI){APPALTO_BOZZE_META[APPALTO_LUNEDI]={...(APPALTO_BOZZE_META[APPALTO_LUNEDI]||{}),modificatoIl:new Date().toISOString(),pending:true};localStorage.setItem(APPALTO_BOZZE_META_KEY,JSON.stringify(APPALTO_BOZZE_META));}
+    aggiornaStatoAutosaveAppalto('Bozza salvata su questo computer · salvataggio automatico tra pochi secondi');
+    programmaSalvataggioAutomaticoAppalto();
+  }
+  localStorage.setItem(APPALTO_STORAGE_KEY,attuale);
+}
+function programmaSalvataggioAutomaticoAppalto(){
+  clearTimeout(APPALTO_AUTOSAVE_TIMER);
+  const settimana=APPALTO_LUNEDI;
+  if(!settimana||!APPALTO_BOZZE_META[settimana]?.pending)return;
+  APPALTO_AUTOSAVE_TIMER=setTimeout(()=>{if(APPALTO_LUNEDI===settimana)salvaAutomaticamenteSettimanaAppalto();},APPALTO_AUTOSAVE_ATTESA);
+}
+function annullaUltimaModificaAppalto(){
+  const stato=APPALTO_UNDO.pop();if(!stato){toast('Non ci sono modifiche da annullare.','warn');return;}
+  APPALTO_SETTIMANE=stato;localStorage.setItem(APPALTO_STORAGE_KEY,JSON.stringify(APPALTO_SETTIMANE));localStorage.setItem(APPALTO_UNDO_KEY,JSON.stringify(APPALTO_UNDO));
+  if(APPALTO_LUNEDI){APPALTO_BOZZE_META[APPALTO_LUNEDI]={...(APPALTO_BOZZE_META[APPALTO_LUNEDI]||{}),modificatoIl:new Date().toISOString(),pending:true};localStorage.setItem(APPALTO_BOZZE_META_KEY,JSON.stringify(APPALTO_BOZZE_META));}
+  aggiornaStatoAutosaveAppalto('Ultima modifica annullata · bozza locale aggiornata');programmaSalvataggioAutomaticoAppalto();renderCorpoAppalto();
+}
 function caricaMappatureAppalto(){try{const m=JSON.parse(localStorage.getItem(APPALTO_MAPPING_KEY)||'{}');return{reparti:m.reparti||{},attivita:m.attivita||{}};}catch(_){return{reparti:{},attivita:{}};}}
 function salvaMappatureAppalto(){localStorage.setItem(APPALTO_MAPPING_KEY,JSON.stringify(APPALTO_MAPPING));}
 async function caricaStatoCassanoSupabase(){
@@ -863,9 +896,13 @@ async function caricaStatoCassanoSupabase(){
   CATALOGO_PROGRAMMAZIONE_CASSANO=catalogo.data||[];
   REPARTI_PRINCIPALI_CASSANO=new Map((repartiPrincipali.data||[]).map(x=>[String(x.ID_Dipendente),Number(x.ID_Reparto)]));
   if((settimane.data||[]).length){
-    const remote={};(settimane.data||[]).forEach(s=>remote[s.Lunedi]={stato:s.Stato,origine:s.OrigineLunedi?'Settimana precedente '+s.OrigineLunedi:'Supabase',righe:[]});
+    const remote={};(settimane.data||[]).forEach(s=>{APPALTO_VERSIONI_REMOTE.set(s.Lunedi,s.AggiornatoIl||null);remote[s.Lunedi]={stato:s.Stato,origine:s.OrigineLunedi?'Settimana precedente '+s.OrigineLunedi:'Supabase',righe:[]};});
     (turni.data||[]).forEach(t=>{const s=remote[t.Settimana];if(!s)return;s.righe.push({uid:t.UID,giorno:Number(t.GiornoIndice),nome:t.NomeOrigine||'',id_dipendente:t.ID_Dipendente,reparto:t.RepartoOrigine||'',id_reparto:t.ID_Reparto,attivita:t.AttivitaOrigine||'',id_attivita:t.ID_Attivita,id_catalogo_programmazione:t.ID_CatalogoProgrammazione||null,origine_nome:t.NomeOrigine||'',origine_reparto:t.RepartoOrigine||'',origine_attivita:t.AttivitaOrigine||'',inizio:t.OraInizio?String(t.OraInizio).slice(0,5):'',fine:t.OraFine?String(t.OraFine).slice(0,5):'',tipo:t.Tipo||'standard',sostituisce:t.UIDSostituito||undefined,note:t.Note||''});});
-    APPALTO_SETTIMANE={...APPALTO_SETTIMANE,...remote};salvaSettimaneAppalto();
+    Object.entries(remote).forEach(([lunedi,dati])=>{
+      const bozza=APPALTO_BOZZE_META[lunedi];
+      if(bozza?.pending){APPALTO_MSG='Bozza locale più recente mantenuta su questo computer. Salvala per pubblicarla su Supabase.';return;}
+      APPALTO_SETTIMANE[lunedi]=dati;
+    });salvaSettimaneAppalto({silenzioso:true});
   }
   statoSync('Connesso a Supabase');
 }
@@ -888,7 +925,7 @@ function turnoConRepartoAttivitaValido(r){
 function rigaPianificataDaSupabase(t){
   return {uid:t.UID,giorno:Number(t.GiornoIndice),nome:t.NomeOrigine||'',id_dipendente:t.ID_Dipendente,reparto:t.RepartoOrigine||'',id_reparto:t.ID_Reparto,attivita:t.AttivitaOrigine||'',id_attivita:t.ID_Attivita,id_catalogo_programmazione:t.ID_CatalogoProgrammazione||null,origine_nome:t.NomeOrigine||'',origine_reparto:t.RepartoOrigine||'',origine_attivita:t.AttivitaOrigine||'',inizio:t.OraInizio?String(t.OraInizio).slice(0,5):'',fine:t.OraFine?String(t.OraFine).slice(0,5):'',tipo:t.Tipo||'standard',sostituisce:t.UIDSostituito||undefined,note:t.Note||''};
 }
-async function salvaSettimanaSupabase(motivoStorico='salvataggio settimana'){
+async function salvaSettimanaSupabaseBase(motivoStorico='salvataggio settimana'){
   const settimana=APPALTO_SETTIMANE[APPALTO_LUNEDI];if(!settimana){toast('Prima crea la settimana.','warn');return false;}
   if(!SESSIONE_CASSANO||!projectIdValido()){toast('Sessione Supabase non valida.','err');return false;}
   normalizzaRighePlanner(settimana);
@@ -997,9 +1034,9 @@ function renderProgrammazioneAppaltoTab(){
   APPALTO_LUNEDI=lunediProssimaSettimana();
   if(!APPALTO_SETTIMANE[APPALTO_LUNEDI]&&APPALTO_LUNEDI==='2026-09-14')importaPdfComeSettimana(APPALTO_LUNEDI);
   document.getElementById('mc').innerHTML=`<div class="card"><div class="ct">Programmazione dell'intero appalto</div>
-    <div class="alert aok">Programmatore unico collegato a Supabase: ogni fascia appartiene alla persona, anche quando nella stessa giornata cambia reparto o attività. Le modifiche restano in bozza sul dispositivo fino a “Salva settimana”.</div>
+    <div class="alert aok">Programmatore unico collegato a Supabase: ogni fascia appartiene alla persona, anche quando nella stessa giornata cambia reparto o attività. Ogni modifica viene salvata subito in bozza sul computer e poi automaticamente su Supabase dopo pochi secondi. Se la settimana viene modificata da un altro computer, il salvataggio viene bloccato per evitare sovrascritture.</div>
     <div class="g2 no-print" style="max-width:520px;"><div class="fg"><label>Lunedì della settimana</label><input type="date" id="appalto-lun" value="${APPALTO_LUNEDI}" onchange="caricaSettimanaAppalto(this.value)"></div><div class="fg"><label>Reparto</label><select id="appalto-rep" onchange="APPALTO_REPARTO=this.value;renderCorpoAppalto()"></select></div></div>
-    <div class="brow no-print"><button class="btn bv bsm" onclick="salvaSettimanaSupabase()">💾 Salva settimana</button><button class="btn bo bsm" onclick="apriStoricoSettimana()">🕘 Storico / ripristina</button><button class="btn bp bsm" onclick="creaDaSettimanaPrecedente()">↪ Crea dalla settimana precedente</button><button class="btn bo bsm" onclick="aggiungiFasciaAppalto()">＋ Aggiungi fascia</button><button id="appalto-seleziona-replica" class="btn bo bsm" onclick="toggleSelezioneReplica()">☑ Seleziona turni</button><button id="appalto-seleziona-filtrati" class="btn bo bsm" style="display:none" onclick="toggleReplicaFiltrati()">☑ Seleziona tutti i filtrati</button><button id="appalto-conferma-replica" class="btn bv bsm" style="display:none" onclick="apriReplicaSelezionati()">↻ Replica selezionati (0)</button><button class="btn bo bsm" onclick="ordinaNominativiAppalto()">A–Z Riordina nominativi</button><button class="btn bo bsm" onclick="controllaAssenzeAppalto()">🔎 Controlla assenze Nexus</button><button class="btn bo bsm" onclick="APPALTO_SOLO_ASSENTI=!APPALTO_SOLO_ASSENTI;renderCorpoAppalto()">Solo da sostituire</button><button class="btn bo bsm" onclick="APPALTO_VISTA_PERSONE=!APPALTO_VISTA_PERSONE;renderCorpoAppalto()">Vista persone/reparto</button><button id="toggle-vista-settimana" class="btn bv bsm" onclick="toggleVistaProgrammazioneAppalto()">▦ Vista settimanale / giornaliera</button><button class="btn bo bsm" onclick="apriAnteprimaTurniAppalto()">📄 Anteprima / PDF</button><button class="btn bo bsm" onclick="apriAnteprimaTurniReparti()">📚 PDF per reparti</button></div>
+    <div class="brow no-print"><button class="btn bv bsm" onclick="salvaSettimanaSupabase()">💾 Salva settimana</button><button id="appalto-annulla" class="btn bo bsm" onclick="annullaUltimaModificaAppalto()">↶ Annulla modifica</button><button class="btn bo bsm" onclick="apriStoricoSettimana()">🕘 Storico / ripristina</button><span id="appalto-autosalvataggio" style="align-self:center;font-size:12px;color:var(--grigio);font-weight:600">${APPALTO_SALVATAGGIO_STATO}</span><button class="btn bp bsm" onclick="creaDaSettimanaPrecedente()">↪ Crea dalla settimana precedente</button><button class="btn bo bsm" onclick="aggiungiFasciaAppalto()">＋ Aggiungi fascia</button><button id="appalto-seleziona-replica" class="btn bo bsm" onclick="toggleSelezioneReplica()">☑ Seleziona turni</button><button id="appalto-seleziona-filtrati" class="btn bo bsm" style="display:none" onclick="toggleReplicaFiltrati()">☑ Seleziona tutti i filtrati</button><button id="appalto-conferma-replica" class="btn bv bsm" style="display:none" onclick="apriReplicaSelezionati()">↻ Replica selezionati (0)</button><button class="btn bo bsm" onclick="ordinaNominativiAppalto()">A–Z Riordina nominativi</button><button class="btn bo bsm" onclick="controllaAssenzeAppalto()">🔎 Controlla assenze Nexus</button><button class="btn bo bsm" onclick="APPALTO_SOLO_ASSENTI=!APPALTO_SOLO_ASSENTI;renderCorpoAppalto()">Solo da sostituire</button><button class="btn bo bsm" onclick="APPALTO_VISTA_PERSONE=!APPALTO_VISTA_PERSONE;renderCorpoAppalto()">Vista persone/reparto</button><button id="toggle-vista-settimana" class="btn bv bsm" onclick="toggleVistaProgrammazioneAppalto()">▦ Vista settimanale / giornaliera</button><button class="btn bo bsm" onclick="apriAnteprimaTurniAppalto()">📄 Anteprima / PDF</button><button class="btn bo bsm" onclick="apriAnteprimaTurniReparti()">📚 PDF per reparti</button></div>
     <div id="appalto-msg"></div><div id="appalto-tabs"></div><div id="appalto-of"></div><div id="appalto-controlli"></div><div id="appalto-filtri"></div><div id="appalto-personale"></div><div id="appalto-body"></div></div>`;
   caricaSettimanaAppalto(APPALTO_LUNEDI);
 }
@@ -1008,11 +1045,12 @@ function caricaSettimanaAppalto(lunedi){
   APPALTO_OF_DATA={previsioni:{},obiettivi:{},percLegaggio:0,percNavetta:0,caricato:false};
   const dataInput=document.getElementById('appalto-lun');if(dataInput)dataInput.value=APPALTO_LUNEDI;
   const settimana=APPALTO_SETTIMANE[APPALTO_LUNEDI];
-  normalizzaRighePlanner(settimana);if(settimana)salvaSettimaneAppalto();
+  normalizzaRighePlanner(settimana);if(settimana)salvaSettimaneAppalto({silenzioso:true});
   const reparti=['Tutti',...new Set([...REPARTI.map(nomeReparto),...(settimana?.righe||[]).map(r=>r.reparto)].filter(Boolean))];
   if(!reparti.includes(APPALTO_REPARTO))APPALTO_REPARTO='Tutti';
   const sel=document.getElementById('appalto-rep');if(sel)sel.innerHTML=reparti.map(r=>`<option ${r===APPALTO_REPARTO?'selected':''}>${r}</option>`).join('');
   renderTabsAppalto();
+  if(APPALTO_BOZZE_META[APPALTO_LUNEDI]?.pending)programmaSalvataggioAutomaticoAppalto();
   caricaDatiOrtofruttaAppalto().then(()=>renderCorpoAppalto());
   if(settimana)controllaAssenzeAppalto(true);
 }
@@ -2407,6 +2445,44 @@ async function scaricaPdfTurniReparti(){
   toast('Creato archivio con '+quanti+' PDF di reparto.','ok');
 }
 
+
+// Salvataggio automatico e protezione da sovrascrittura tra computer.
+async function verificaConflittoSettimanaAppalto(){
+  const attesa=APPALTO_VERSIONI_REMOTE.get(APPALTO_LUNEDI)||null;
+  const{data,error}=await sb.from('SettimaneCassano').select('AggiornatoIl').eq('Lunedi',APPALTO_LUNEDI).maybeSingle();
+  if(error){toast('Impossibile verificare gli aggiornamenti remoti: '+error.message,'err');return false;}
+  const presente=data?.AggiornatoIl||null;
+  if(String(presente||'')!==String(attesa||'')){
+    aggiornaStatoAutosaveAppalto('Salvataggio bloccato: la settimana è stata aggiornata da un altro computer');
+    toast('La settimana è stata aggiornata da un altro computer. Le tue modifiche locali non sono state sovrascritte: verifica lo storico o ricarica la settimana prima di salvare.','warn');
+    return false;
+  }
+  return true;
+}
+async function salvaSettimanaSupabase(motivoStorico='salvataggio settimana'){
+  if(APPALTO_SALVATAGGIO_IN_CORSO)return false;
+  if(!SESSIONE_CASSANO||!projectIdValido())return salvaSettimanaSupabaseBase(motivoStorico);
+  APPALTO_SALVATAGGIO_IN_CORSO=true;aggiornaStatoAutosaveAppalto('Verifica aggiornamenti in corso…');
+  try{
+    if(!await verificaConflittoSettimanaAppalto())return false;
+    const ok=await salvaSettimanaSupabaseBase(motivoStorico);
+    if(ok){
+      const{data}=await sb.from('SettimaneCassano').select('AggiornatoIl').eq('Lunedi',APPALTO_LUNEDI).maybeSingle();
+      APPALTO_VERSIONI_REMOTE.set(APPALTO_LUNEDI,data?.AggiornatoIl||null);
+      if(APPALTO_BOZZE_META[APPALTO_LUNEDI]){APPALTO_BOZZE_META[APPALTO_LUNEDI].pending=false;APPALTO_BOZZE_META[APPALTO_LUNEDI].salvatoIl=new Date().toISOString();localStorage.setItem(APPALTO_BOZZE_META_KEY,JSON.stringify(APPALTO_BOZZE_META));}
+      aggiornaStatoAutosaveAppalto('Salvato automaticamente su Supabase alle '+new Date().toLocaleTimeString('it-IT',{hour:'2-digit',minute:'2-digit'}));
+    }
+    return ok;
+  }finally{APPALTO_SALVATAGGIO_IN_CORSO=false;}
+}
+async function salvaAutomaticamenteSettimanaAppalto(){
+  if(!APPALTO_LUNEDI||!APPALTO_BOZZE_META[APPALTO_LUNEDI]?.pending||APPALTO_SALVATAGGIO_IN_CORSO)return;
+  aggiornaStatoAutosaveAppalto('Salvataggio automatico in corso…');
+  await salvaSettimanaSupabase('salvataggio automatico');
+}
+window.addEventListener('beforeunload',()=>{if(APPALTO_LUNEDI&&APPALTO_BOZZE_META[APPALTO_LUNEDI]?.pending)localStorage.setItem(APPALTO_STORAGE_KEY,JSON.stringify(APPALTO_SETTIMANE));});
+
+aggiornaStatoAutosaveAppalto(APPALTO_UNDO.length?'Bozza locale pronta':'Nessuna modifica da salvare');
 
 avviaApp();
 </script>
