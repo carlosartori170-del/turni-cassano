@@ -2245,7 +2245,7 @@ function datiStampaTurniAppalto(){
     });
   });
   const righe=[...persone.values()].filter(p=>p.giorni.some(g=>g.turni.length||g.riposo||g.assenza)).sort((a,b)=>a.nome.localeCompare(b.nome,'it',{sensitivity:'base'}));
-  righe.forEach(p=>p.giorni.forEach(assegnaCategoriePdfCella));
+  righe.forEach(p=>p.giorni.forEach(cella=>{cella.turni=ordinaTurniCronologicamenteCella(cella.turni);assegnaCategoriePdfCella(cella);}));
   return{settimana,righe,giorni,titolo:'TUTTO L’APPALTO',categoria:'totale'};
 }
 
