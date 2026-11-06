@@ -2412,7 +2412,7 @@ function creaDocumentoPdfTurni(dati){
   const body=dati.righe.map(p=>[p.nome,...p.giorni.map(testoCellaStampa)]);
   const categorieA4=['forno','lavaggio','ricevimento'];
   const formato=categorieA4.includes(dati.categoria)?'a4':'a3';
-  const limitePagine=dati.categoria==='ortofrutta'?2:(dati.categoria==='totale'?null:1);
+  const limitePagine=dati.categoria==='ortofrutta'?2:null;
   const notaColori='I colori delle singole mansioni corrispondono all’anteprima turni. Riposo blu - Assente rosso.';
 
   const costruisciDocumento=(fontSize,padding)=>{
@@ -2488,24 +2488,52 @@ function creaDocumentoPdfTurni(dati){
   }
   return doc;
 }
+function avviaDownloadBlob(blob,nomeFile){
+  const url=URL.createObjectURL(blob),a=document.createElement('a');
+  a.href=url;a.download=nomeFile;a.style.display='none';document.body.appendChild(a);a.click();a.remove();
+  setTimeout(()=>URL.revokeObjectURL(url),10000);
+}
 function scaricaPdfTurniAppalto(categoria='totale'){
-  const dati=categoria==='totale'?datiStampaTurniAppalto():datiStampaReparto(categoria);if(!dati||!dati.righe.length)return;
-  const doc=creaDocumentoPdfTurni(dati);if(!doc){toast('Il generatore PDF non è ancora disponibile. Ricarica la pagina e riprova.','err');return;}
-  const meta=REPARTI_PDF_APPALTO.find(r=>r.id===categoria),nome=meta?meta.file:'Appalto_Completo';
-  doc.save('Turni_Cassano_'+nome+'_'+APPALTO_LUNEDI+'.pdf');
+  try{
+    const dati=categoria==='totale'?datiStampaTurniAppalto():datiStampaReparto(categoria);
+    if(!dati||!dati.righe.length){toast('Non ci sono turni da esportare per questa stampa.','warn');return;}
+    toast('Preparazione PDF in corso…','ok');
+    const doc=creaDocumentoPdfTurni(dati);
+    if(!doc){toast('Il generatore PDF non è ancora disponibile. Ricarica la pagina e riprova.','err');return;}
+    const meta=REPARTI_PDF_APPALTO.find(r=>r.id===categoria),nome=meta?meta.file:'Appalto_Completo';
+    avviaDownloadBlob(doc.output('blob'),'Turni_Cassano_'+nome+'_'+APPALTO_LUNEDI+'.pdf');
+    toast('PDF creato e scaricato.','ok');
+  }catch(error){
+    console.error('Errore creazione PDF',error);
+    toast('Impossibile creare il PDF: '+(error?.message||'errore imprevisto')+'.','err');
+  }
 }
 async function scaricaPdfTurniReparti(){
   if(!window.JSZip){toast('Il generatore ZIP non è ancora disponibile. Ricarica la pagina e riprova.','err');return;}
-  const zip=new JSZip();let quanti=0;
+  const zip=new JSZip();let quanti=0;const errori=[];
+  toast('Preparazione dei PDF di reparto…','ok');
   for(const meta of REPARTI_PDF_APPALTO){
-    const dati=datiStampaReparto(meta.id);if(!dati?.righe.length)continue;
-    const doc=creaDocumentoPdfTurni(dati);if(!doc)continue;
-    zip.file('Turni_Cassano_'+meta.file+'_'+APPALTO_LUNEDI+'.pdf',doc.output('arraybuffer'));quanti++;
+    try{
+      const dati=datiStampaReparto(meta.id);if(!dati?.righe.length)continue;
+      const doc=creaDocumentoPdfTurni(dati);if(!doc)continue;
+      zip.file('Turni_Cassano_'+meta.file+'_'+APPALTO_LUNEDI+'.pdf',doc.output('arraybuffer'));quanti++;
+      await new Promise(resolve=>setTimeout(resolve,0));
+    }catch(error){
+      console.error('Errore PDF reparto '+meta.id,error);errori.push(meta.titolo);
+    }
   }
-  if(!quanti){toast('Non ci sono turni di reparto da esportare.','warn');return;}
-  const blob=await zip.generateAsync({type:'blob',compression:'DEFLATE'}),a=document.createElement('a');
-  a.href=URL.createObjectURL(blob);a.download='Turni_Cassano_per_reparti_'+APPALTO_LUNEDI+'.zip';document.body.appendChild(a);a.click();a.remove();setTimeout(()=>URL.revokeObjectURL(a.href),1500);
-  toast('Creato archivio con '+quanti+' PDF di reparto.','ok');
+  if(!quanti){
+    toast(errori.length?'Non è stato possibile generare i PDF. Ricarica la pagina e riprova.':'Non ci sono turni di reparto da esportare.','err');return;
+  }
+  try{
+    toast('Creazione archivio con '+quanti+' PDF…','ok');
+    const blob=await zip.generateAsync({type:'blob',compression:'STORE'});
+    avviaDownloadBlob(blob,'Turni_Cassano_per_reparti_'+APPALTO_LUNEDI+'.zip');
+    toast('Scaricato archivio con '+quanti+' PDF'+(errori.length?' — non creati: '+errori.join(', '):'')+'.',errori.length?'warn':'ok');
+  }catch(error){
+    console.error('Errore creazione ZIP',error);
+    toast('Impossibile creare l’archivio PDF: '+(error?.message||'errore imprevisto')+'.','err');
+  }
 }
 
 
