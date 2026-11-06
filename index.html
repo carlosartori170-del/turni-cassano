@@ -2365,7 +2365,7 @@ function legendaColoriDettaglioPdf(dati){
   if(dati.categoria==='forno'||dati.categoria==='lavaggio')return'<div class="legenda-turni legenda-dettaglio"><strong>Colori per fascia:</strong>'+Object.values(COLORI_FASCE_PDF).map(c=>'<span><i style="background:'+c.hex+'"></i>'+c.label+'</span>').join('')+'</div>';
   return'';
 }
-function testoMansioneTurnoPdf(turno){if(categoriaDirettaPdfTurno(turno)==='forno')return'Lavaggio forno';const reparto=testoPulitoStampa(turno?.reparto),attivita=testoPulitoStampa(turno?.attivita);return reparto+(attivita?' - '+attivita:'');}
+function testoMansioneTurnoPdf(turno){if(categoriaDirettaPdfTurno(turno)==='forno')return'Lavaggio forno';const reparto=testoPulitoStampa(turno?.reparto),attivita=testoPulitoStampa(turno?.attivita);if(/economia/i.test(reparto))return attivita||'Attività';return reparto+(attivita?' - '+attivita:'');}
 function disegnaTurniColoratiPdf(doc,cellaPdf,cellaDati,categoria,fontBase=7){
   const turni=cellaDati.turni||[];if(!turni.length)return;
   const x=cellaPdf.x,y=cellaPdf.y,w=cellaPdf.width,h=cellaPdf.height,altezza=h/turni.length;
