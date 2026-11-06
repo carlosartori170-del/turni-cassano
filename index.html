@@ -2419,7 +2419,7 @@ function creaDocumentoPdfTurni(dati){
   const notaColori='I colori delle singole mansioni corrispondono all’anteprima turni. Riposo blu - Assente rosso.';
 
   const costruisciDocumento=(fontSize,padding)=>{
-    const doc=new jsPDF({orientation:'landscape',unit:'mm',format,compress:true});
+    const doc=new jsPDF({orientation:'landscape',unit:'mm',format:formato,compress:true});
     const larghezzaPagina=doc.internal.pageSize.getWidth(),altezzaPagina=doc.internal.pageSize.getHeight();
     const margine=6,area=larghezzaPagina-margine*2;
     const larghezzaNome=formato==='a4'?43:60,larghezzaGiorno=(area-larghezzaNome)/7;
