@@ -2402,7 +2402,10 @@ function apriAnteprimaTurniAppalto(categoria='totale'){
   const verifica=APPALTO_ASSENZE_VERIFICATE?'Assenze Nexus verificate':'Attenzione: assenze Nexus non verificate in questa sessione';
   const legendaDettaglio=legendaColoriDettaglioPdf(dati);
   const opzioni=[{id:'totale',titolo:'Tutto l’appalto'},...REPARTI_PDF_APPALTO].map(r=>'<option value="'+r.id+'" '+(r.id===categoria?'selected':'')+'>'+escapeHtmlStampa(r.titolo)+'</option>').join('');
-  document.body.insertAdjacentHTML('beforeend',`<div id="stampa-turni-overlay" class="stampa-turni-overlay" role="dialog" aria-modal="true"><div class="stampa-turni-card"><div class="stampa-turni-toolbar"><div><h2>Anteprima turni — ${escapeHtmlStampa(dati.titolo)}</h2><small>${dati.righe.length} persone · ${escapeHtmlStampa(verifica)}</small></div><div class="brow"><select class="in" aria-label="Reparto da visualizzare" onchange="apriAnteprimaTurniAppalto(this.value)">${opzioni}</select><button class="btn bo" type="button" onclick="chiudiAnteprimaTurniAppalto()">Chiudi</button><button class="btn bo" type="button" onclick="scaricaPdfTurniReparti()">⬇ Tutti i reparti (.zip)</button><button class="btn bv" type="button" onclick="scaricaPdfTurniAppalto('${categoria}')">⬇ Scarica questo PDF</button></div></div><div class="stampa-turni-scroller"><div class="foglio-turni"><div class="foglio-turni-head"><div><h3>TURNI ${escapeHtmlStampa(dati.titolo)} — CASSANO MAGNAGO</h3><p>Settimana dal ${fmtDataIt(APPALTO_LUNEDI)} al ${fmtDataIt(addGiorni(APPALTO_LUNEDI,6))}</p></div><p>Generato il ${new Date().toLocaleString('it-IT')}</p></div><table class="tabella-turni-pdf"><thead><tr><th>PERSONA</th>${intestazioni}</tr></thead><tbody>${righe}</tbody></table><div class="legenda-turni"><span><i class="rep-ortofrutta"></i>Ortofrutta</span><span><i class="rep-carico"></i>Carico</span><span><i class="rep-lavaggio"></i>Lavaggio</span><span><i class="rep-economia"></i>Lavaggio forno</span><span><i class="rep-vuoti"></i>Vuoti</span><span><i class="rep-grocery"></i>Grocery</span><span><i class="cella-stampa-riposo"></i>Riposo</span><span><i class="cella-stampa-assenza"></i>Assente</span></div>${legendaDettaglio}</div></div></div></div>`);
+  document.body.insertAdjacentHTML('beforeend',`<div id="stampa-turni-overlay" class="stampa-turni-overlay" role="dialog" aria-modal="true"><div class="stampa-turni-card"><div class="stampa-turni-toolbar"><div><h2>Anteprima turni — ${escapeHtmlStampa(dati.titolo)}</h2><small>${dati.righe.length} persone · ${escapeHtmlStampa(verifica)}</small></div><div class="brow"><select class="in" aria-label="Reparto da visualizzare" onchange="apriAnteprimaTurniAppalto(this.value)">${opzioni}</select><button class="btn bo" type="button" onclick="chiudiAnteprimaTurniAppalto()">Chiudi</button><button class="btn bo" id="scarica-pdf-reparti" type="button">⬇ Tutti i reparti (.zip)</button><button class="btn bv" id="scarica-pdf-singolo" type="button">⬇ Scarica questo PDF</button></div><div id="stampa-download-stato" style="width:100%;font-size:.75rem;color:#444"></div></div><div class="stampa-turni-scroller"><div class="foglio-turni"><div class="foglio-turni-head"><div><h3>TURNI ${escapeHtmlStampa(dati.titolo)} — CASSANO MAGNAGO</h3><p>Settimana dal ${fmtDataIt(APPALTO_LUNEDI)} al ${fmtDataIt(addGiorni(APPALTO_LUNEDI,6))}</p></div><p>Generato il ${new Date().toLocaleString('it-IT')}</p></div><table class="tabella-turni-pdf"><thead><tr><th>PERSONA</th>${intestazioni}</tr></thead><tbody>${righe}</tbody></table><div class="legenda-turni"><span><i class="rep-ortofrutta"></i>Ortofrutta</span><span><i class="rep-carico"></i>Carico</span><span><i class="rep-lavaggio"></i>Lavaggio</span><span><i class="rep-economia"></i>Lavaggio forno</span><span><i class="rep-vuoti"></i>Vuoti</span><span><i class="rep-grocery"></i>Grocery</span><span><i class="cella-stampa-riposo"></i>Riposo</span><span><i class="cella-stampa-assenza"></i>Assente</span></div>${legendaDettaglio}</div></div></div></div>`);
+  const overlay=document.getElementById('stampa-turni-overlay');
+  overlay?.querySelector('#scarica-pdf-singolo')?.addEventListener('click',event=>scaricaPdfTurniAppalto(categoria,event.currentTarget));
+  overlay?.querySelector('#scarica-pdf-reparti')?.addEventListener('click',event=>scaricaPdfTurniReparti(event.currentTarget));
 }
 function apriAnteprimaTurniReparti(){apriAnteprimaTurniAppalto('vuoti');}
 function chiudiAnteprimaTurniAppalto(){document.getElementById('stampa-turni-overlay')?.remove();}
@@ -2488,54 +2491,73 @@ function creaDocumentoPdfTurni(dati){
   }
   return doc;
 }
+function statoDownloadPdf(messaggio,tipo='info',link=null,nomeFile=''){
+  const el=document.getElementById('stampa-download-stato');if(!el)return;
+  const colore=tipo==='errore'?'#991b1b':tipo==='ok'?'#0b6b38':'#444';
+  el.innerHTML='<span style="color:'+colore+'">'+messaggio+'</span>';
+  if(link){
+    const a=document.createElement('a');a.href=link;a.download=nomeFile;a.textContent=' Clicca qui per scaricare';
+    a.style.cssText='display:inline-block;margin-left:8px;color:#0b6b38;font-weight:800;text-decoration:underline';
+    el.appendChild(a);
+  }
+}
 function avviaDownloadBlob(blob,nomeFile){
   const url=URL.createObjectURL(blob),a=document.createElement('a');
-  a.href=url;a.download=nomeFile;a.style.display='none';document.body.appendChild(a);a.click();a.remove();
-  setTimeout(()=>URL.revokeObjectURL(url),10000);
+  a.href=url;a.download=nomeFile;a.style.display='none';document.body.appendChild(a);
+  statoDownloadPdf('File pronto.','ok',url,nomeFile);
+  a.click();a.remove();
+  setTimeout(()=>URL.revokeObjectURL(url),300000);
 }
-function scaricaPdfTurniAppalto(categoria='totale'){
+async function scaricaPdfTurniAppalto(categoria='totale',bottone=null){
+  const testoOriginale=bottone?.textContent;
   try{
+    if(bottone){bottone.disabled=true;bottone.textContent='Preparazione PDF…';}
+    statoDownloadPdf('Preparazione del PDF in corso…');
+    await new Promise(resolve=>requestAnimationFrame(()=>resolve()));
     const dati=categoria==='totale'?datiStampaTurniAppalto():datiStampaReparto(categoria);
-    if(!dati||!dati.righe.length){toast('Non ci sono turni da esportare per questa stampa.','warn');return;}
-    toast('Preparazione PDF in corso…','ok');
+    if(!dati||!dati.righe.length){statoDownloadPdf('Non ci sono turni da esportare per questa stampa.','errore');return;}
     const doc=creaDocumentoPdfTurni(dati);
-    if(!doc){toast('Il generatore PDF non è ancora disponibile. Ricarica la pagina e riprova.','err');return;}
+    if(!doc){statoDownloadPdf('Il generatore PDF non è disponibile. Ricarica la pagina.','errore');return;}
     const meta=REPARTI_PDF_APPALTO.find(r=>r.id===categoria),nome=meta?meta.file:'Appalto_Completo';
     avviaDownloadBlob(doc.output('blob'),'Turni_Cassano_'+nome+'_'+APPALTO_LUNEDI+'.pdf');
-    toast('PDF creato e scaricato.','ok');
   }catch(error){
     console.error('Errore creazione PDF',error);
-    toast('Impossibile creare il PDF: '+(error?.message||'errore imprevisto')+'.','err');
+    statoDownloadPdf('Errore nella creazione del PDF: '+(error?.message||'errore imprevisto')+'.','errore');
+  }finally{
+    if(bottone){bottone.disabled=false;bottone.textContent=testoOriginale||'⬇ Scarica questo PDF';}
   }
 }
-async function scaricaPdfTurniReparti(){
-  if(!window.JSZip){toast('Il generatore ZIP non è ancora disponibile. Ricarica la pagina e riprova.','err');return;}
+async function scaricaPdfTurniReparti(bottone=null){
+  const testoOriginale=bottone?.textContent;
+  if(!window.JSZip){statoDownloadPdf('Il generatore ZIP non è disponibile. Ricarica la pagina.','errore');return;}
   const zip=new JSZip();let quanti=0;const errori=[];
-  toast('Preparazione dei PDF di reparto…','ok');
-  for(const meta of REPARTI_PDF_APPALTO){
-    try{
-      const dati=datiStampaReparto(meta.id);if(!dati?.righe.length)continue;
-      const doc=creaDocumentoPdfTurni(dati);if(!doc)continue;
-      zip.file('Turni_Cassano_'+meta.file+'_'+APPALTO_LUNEDI+'.pdf',doc.output('arraybuffer'));quanti++;
-      await new Promise(resolve=>setTimeout(resolve,0));
-    }catch(error){
-      console.error('Errore PDF reparto '+meta.id,error);errori.push(meta.titolo);
-    }
-  }
-  if(!quanti){
-    toast(errori.length?'Non è stato possibile generare i PDF. Ricarica la pagina e riprova.':'Non ci sono turni di reparto da esportare.','err');return;
-  }
   try{
-    toast('Creazione archivio con '+quanti+' PDF…','ok');
+    if(bottone){bottone.disabled=true;bottone.textContent='Preparazione ZIP…';}
+    statoDownloadPdf('Preparazione dei PDF di reparto…');
+    await new Promise(resolve=>requestAnimationFrame(()=>resolve()));
+    for(const meta of REPARTI_PDF_APPALTO){
+      try{
+        statoDownloadPdf('Preparazione: '+meta.titolo+'…');
+        const dati=datiStampaReparto(meta.id);if(!dati?.righe.length)continue;
+        const doc=creaDocumentoPdfTurni(dati);if(!doc)continue;
+        zip.file('Turni_Cassano_'+meta.file+'_'+APPALTO_LUNEDI+'.pdf',doc.output('arraybuffer'));quanti++;
+        await new Promise(resolve=>setTimeout(resolve,0));
+      }catch(error){
+        console.error('Errore PDF reparto '+meta.id,error);errori.push(meta.titolo);
+      }
+    }
+    if(!quanti){statoDownloadPdf('Non è stato possibile generare alcun PDF.','errore');return;}
+    statoDownloadPdf('Creazione archivio con '+quanti+' PDF…');
     const blob=await zip.generateAsync({type:'blob',compression:'STORE'});
     avviaDownloadBlob(blob,'Turni_Cassano_per_reparti_'+APPALTO_LUNEDI+'.zip');
-    toast('Scaricato archivio con '+quanti+' PDF'+(errori.length?' — non creati: '+errori.join(', '):'')+'.',errori.length?'warn':'ok');
+    if(errori.length)statoDownloadPdf('Archivio pronto. PDF non creati: '+errori.join(', ')+'.','errore');
   }catch(error){
     console.error('Errore creazione ZIP',error);
-    toast('Impossibile creare l’archivio PDF: '+(error?.message||'errore imprevisto')+'.','err');
+    statoDownloadPdf('Errore nella creazione dell’archivio: '+(error?.message||'errore imprevisto')+'.','errore');
+  }finally{
+    if(bottone){bottone.disabled=false;bottone.textContent=testoOriginale||'⬇ Tutti i reparti (.zip)';}
   }
 }
-
 
 // Salvataggio automatico: nessun controllo di conflitto tra computer.
 async function salvaSettimanaSupabase(motivoStorico='salvataggio settimana'){
