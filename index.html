@@ -2416,7 +2416,7 @@ function creaDocumentoPdfTurni(dati){
   const body=dati.righe.map(p=>[p.nome,...p.giorni.map(testoCellaStampa)]);
   const categorieA4=['forno','lavaggio','ricevimento'];
   const formato=categorieA4.includes(dati.categoria)?'a4':'a3';
-  const limitePagine=dati.categoria==='ortofrutta'?2:null;
+  const limitePagine=dati.categoria==='ortofrutta'?4:null;
   const notaColori='I colori delle singole mansioni corrispondono all’anteprima turni. Riposo blu - Assente rosso.';
 
   const costruisciDocumento=(fontSize,padding)=>{
@@ -2480,13 +2480,13 @@ function creaDocumentoPdfTurni(dati){
     return doc;
   };
 
-  let fontSize=formato==='a4'?6.05:(dati.categoria==='ortofrutta'?6.15:6.8);
-  let padding=formato==='a4'?1.0:1.2;
+  let fontSize=formato==='a4'?6.05:(dati.categoria==='ortofrutta'?6.65:6.8);
+  let padding=formato==='a4'?1.0:(dati.categoria==='ortofrutta'?1.35:1.2);
   let doc=costruisciDocumento(fontSize,padding);
   if(limitePagine){
     for(let tentativo=0;tentativo<7&&doc.getNumberOfPages()>limitePagine;tentativo++){
-      fontSize=Math.max(3.2,fontSize*.84);
-      padding=Math.max(.35,padding*.72);
+      fontSize=Math.max(5.0,fontSize*.9);
+      padding=Math.max(.8,padding*.85);
       doc=costruisciDocumento(fontSize,padding);
     }
   }
