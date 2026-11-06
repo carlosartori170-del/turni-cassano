@@ -2326,17 +2326,35 @@ function fasciaOrariaColorePdf(inizio){
   return'sera';
 }
 function stileColoreTurnoPdf(turno,categoria){
-  const configurato=coloreTurnoDaCatalogo(turno);if(configurato)return configurato;
   const categoriaTurno=turno?.categoriaPdf||categoriaDirettaPdfTurno(turno)||categoria;
+  const configurato=coloreTurnoDaCatalogo(turno);
+  // Il verde #D3F0E3 è il valore iniziale del catalogo: finché non viene personalizzato
+  // usiamo colori distinti per mansione, uguali nell'anteprima e nel PDF.
+  if(configurato&&String(configurato.hex||'').toUpperCase()!=='#D3F0E3')return configurato;
+  const chiave=testoPulitoStampa(turno?.attivita)||testoPulitoStampa(turno?.reparto)||'Attività';
+  if(categoriaTurno==='ortofrutta'){
+    const nome=normalizzaNomePlanner(chiave);
+    const mappa=[
+      [/ventil/,{hex:'#DCFCE7',rgb:[220,252,231]}],
+      [/ricev/,{hex:'#CCFBF1',rgb:[204,251,241]}],
+      [/legagg/,{hex:'#FEF3C7',rgb:[254,243,199]}],
+      [/navett/,{hex:'#DBEAFE',rgb:[219,234,254]}],
+      [/pulizi/,{hex:'#F3E8FF',rgb:[243,232,255]}],
+      [/allest/,{hex:'#FFEDD5',rgb:[255,237,213]}],
+      [/formaz/,{hex:'#FCE7F3',rgb:[252,231,243]}],
+      [/mulett|carrell/,{hex:'#E0F2FE',rgb:[224,242,254]}]
+    ];
+    const colore=mappa.find(([re])=>re.test(nome))?.[1]||COLORI_ATTIVITA_PDF[indiceColoreAttivitaPdf(chiave)];
+    return{...colore,label:chiave,textHex:'#131313',textRgb:[19,19,19]};
+  }
   if(categoriaTurno==='vuoti'||categoriaTurno==='grocery'){
-    const chiave=testoPulitoStampa(turno?.attivita)||testoPulitoStampa(turno?.reparto)||'Attività';
     return{...COLORI_ATTIVITA_PDF[indiceColoreAttivitaPdf(chiave)],label:chiave,textHex:'#131313',textRgb:[19,19,19]};
   }
   if(categoriaTurno==='forno'||categoriaTurno==='lavaggio'){
     const fascia=fasciaOrariaColorePdf(turno?.inizio);
     return{...COLORI_FASCE_PDF[fascia],fascia};
   }
-  return null;
+  return configurato;
 }
 function legendaColoriDettaglioPdf(dati){
   if(dati.categoria==='vuoti'||dati.categoria==='grocery'){
