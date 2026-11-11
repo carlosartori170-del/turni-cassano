@@ -1,5 +1,5 @@
 <!DOCTYPE html>
-<!-- build-pages: pdf-orizzontali-titolo-iniziale-20261111 -->
+<!-- build-pages: pdf-ortofrutta-dimensioni-originali-20261111 -->
 <html lang="it">
 <head>
 <meta charset="UTF-8">
@@ -2544,7 +2544,7 @@ function formatoPdfTurni(categoria){
   return ['forno','lavaggio','ricevimento'].includes(categoria)?'a4':'a3';
 }
 function misureFasciaPdf(doc,turno,larghezza,fontBase,categoria='totale'){
-  const fontOra=fontBase,fontTesto=fontBase*.92,padding=1.25;
+  const fontOra=fontBase,fontTesto=fontBase*(categoria==='ortofrutta'?.86:.92),padding=categoria==='ortofrutta'?1:1.25;
   doc.setFont('helvetica','normal');doc.setFontSize(fontTesto);
   const spazio=larghezza-padding*2;
   const righe=doc.splitTextToSize(testoMansioneTurnoPdf(turno,categoria),spazio);
@@ -2701,8 +2701,9 @@ function creaDocumentoPdfTurni(dati){
     return doc;
   };
 
-  // La leggibilità ha precedenza sul numero di pagine: nessuna riduzione automatica.
-  return costruisciDocumento(formato==='a4'?8.5:9,1.25);
+  // Ortofrutta: ripristina i 6,65 pt della versione originale, senza tagliare le mansioni.
+  // Gli altri reparti mantengono le dimensioni già in uso.
+  return costruisciDocumento(dati.categoria==='ortofrutta'?6.65:formato==='a4'?8.5:9,dati.categoria==='ortofrutta'?1:1.25);
 }
 function statoDownloadPdf(messaggio,tipo='info',link=null,nomeFile=''){
   const el=document.getElementById('stampa-download-stato');if(!el)return;
