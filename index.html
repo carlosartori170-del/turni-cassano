@@ -1,5 +1,5 @@
 <!DOCTYPE html>
-<!-- build-pages: ortofrutta-riga-unica-20261111 -->
+<!-- build-pages: ortofrutta-testata-colli-20261111 -->
 <html lang="it">
 <head>
 <meta charset="UTF-8">
@@ -2608,9 +2608,30 @@ function htmlCellaStampa(cella,categoria='totale'){
   const turni=cella.turni.map(t=>{const stile=stileColoreTurnoPdf(t,categoria),css=stile?' style="background:'+stile.hex+';color:'+(stile.textHex||'#131313')+'"':'';return'<div class="turno-stampa '+classeRepartoStampa(t.reparto)+'"'+css+'><div class="ora">'+escapeHtmlStampa(t.inizio)+'–'+escapeHtmlStampa(t.fine)+'</div><div class="mansione">'+escapeHtmlStampa(testoMansioneTurnoPdf(t,categoria))+'</div></div>';}).join('');
   return'<td>'+turni+'</td>';
 }
-function apriAnteprimaTurniAppalto(categoria='totale'){
+let APPALTO_ANTEPRIMA_PDF_RICHIESTA=0;
+async function preparaPrevisioniPdf(dati){
+  if(dati?.categoria!=='ortofrutta')return;
+  const lunedi=APPALTO_LUNEDI;
+  const {data,error}=await sb.from('PrevisioneColliOrtofrutta').select('Data,ColliPrevisti').in('Data',dati.giorni.map(g=>g.data));
+  if(error)throw new Error('Impossibile leggere i colli previsti: '+error.message);
+  if(APPALTO_LUNEDI!==lunedi)throw new Error('La settimana è cambiata. Riapri il PDF.');
+  dati.previsioniPdf={};
+  (data||[]).forEach(p=>{
+    if(p.ColliPrevisti!=null&&Number.isFinite(Number(p.ColliPrevisti)))dati.previsioniPdf[p.Data]=Number(p.ColliPrevisti);
+  });
+}
+function intestazioneGiornoPdf(g,dati){
+  const base=g.etichetta.slice(0,3).toUpperCase()+'\n'+fmtDataIt(g.data);
+  if(dati.categoria!=='ortofrutta')return base;
+  const colli=dati.previsioniPdf?.[g.data];
+  return base+'\n'+(colli==null?'Prev. non inserita':'Prev. '+colli.toLocaleString('it-IT')+' colli');
+}
+async function apriAnteprimaTurniAppalto(categoria='totale'){
   const dati=categoria==='totale'?datiStampaTurniAppalto():datiStampaReparto(categoria);if(!dati){toast('Prima crea o carica una settimana.','warn');return;}
   if(!dati.righe.length){toast('Non ci sono turni per questo reparto nella settimana selezionata.','warn');return;}
+  const richiesta=++APPALTO_ANTEPRIMA_PDF_RICHIESTA;
+  try{await preparaPrevisioniPdf(dati);}catch(error){if(richiesta===APPALTO_ANTEPRIMA_PDF_RICHIESTA)toast(error.message,'err');return;}
+  if(richiesta!==APPALTO_ANTEPRIMA_PDF_RICHIESTA)return;
   chiudiAnteprimaTurniAppalto();
   const intestazioni=dati.giorni.map(g=>'<th>'+escapeHtmlStampa(g.etichetta.slice(0,3))+'<br>'+fmtDataIt(g.data)+'</th>').join('');
   const righe=dati.righe.map(p=>'<tr><td>'+escapeHtmlStampa(p.nome)+'</td>'+p.giorni.map(c=>htmlCellaStampa(c,dati.categoria)).join('')+'</tr>').join('');
@@ -2635,12 +2656,12 @@ function apriAnteprimaTurniAppalto(categoria='totale'){
   overlay?.querySelector('#scarica-pdf-reparti')?.addEventListener('click',event=>scaricaPdfTurniReparti(event.currentTarget));
 }
 function apriAnteprimaTurniReparti(){apriAnteprimaTurniAppalto('vuoti');}
-function chiudiAnteprimaTurniAppalto(){const el=document.getElementById('stampa-turni-overlay');if(el?.dataset.pdfUrl)URL.revokeObjectURL(el.dataset.pdfUrl);el?.remove();}
+function chiudiAnteprimaTurniAppalto(){APPALTO_ANTEPRIMA_PDF_RICHIESTA++;const el=document.getElementById('stampa-turni-overlay');if(el?.dataset.pdfUrl)URL.revokeObjectURL(el.dataset.pdfUrl);el?.remove();}
 function creaDocumentoPdfTurni(dati){
   const jsPDF=window.jspdf?.jsPDF;if(!jsPDF)return null;
-  const head=[['PERSONA',...dati.giorni.map(g=>g.etichetta.slice(0,3).toUpperCase()+'\n'+fmtDataIt(g.data))]];
+  const head=[['PERSONA',...dati.giorni.map(g=>intestazioneGiornoPdf(g,dati))]];
   const body=dati.righe.map(p=>[p.nome,...p.giorni.map(c=>testoCellaStampa(c,dati.categoria))]);
-  const formato=formatoPdfTurni(dati.categoria);
+  const formato=formatoPdfTurni(dati.categoria),compatta=dati.categoria==='ortofrutta';
   const notaColori='I colori delle singole mansioni corrispondono all’anteprima turni. Riposo blu - Assente rosso.';
 
   const costruisciDocumento=(fontSize,padding)=>{
@@ -2652,9 +2673,10 @@ function creaDocumentoPdfTurni(dati){
     for(let i=1;i<=7;i++)stiliColonne[i]={cellWidth:larghezzaGiorno};
 
     const disegnaTestata=()=>{
-      doc.setFillColor(19,19,19);doc.rect(margine,7,area,17,'F');
+      doc.setFillColor(19,19,19);doc.rect(margine,7,area,compatta?11:17,'F');
       doc.setFont('helvetica','bold');doc.setFontSize(formato==='a4'?12.5:15);doc.setTextColor(255,255,255);
       doc.text('TURNI '+dati.titolo+' - CASSANO MAGNAGO',margine+4.5,14);
+      if(compatta)return;
       doc.setFont('helvetica','normal');doc.setFontSize(formato==='a4'?6.8:8.2);
       doc.text('Settimana dal '+fmtDataIt(APPALTO_LUNEDI)+' al '+fmtDataIt(addGiorni(APPALTO_LUNEDI,6))+'  -  '+dati.righe.length+' persone',margine+4.5,20);
     };
@@ -2662,8 +2684,8 @@ function creaDocumentoPdfTurni(dati){
     doc.setProperties({title:'Turni '+dati.titolo+' Cassano - '+APPALTO_LUNEDI,subject:'Programmazione settimanale del personale',author:'Nexus S.r.l.'});
     disegnaTestata();
     doc.autoTable({
-      head,body,startY:27,showHead:'everyPage',
-      margin:{top:27,left:margine,right:margine,bottom:13},
+      head,body,startY:compatta?20:27,showHead:'everyPage',
+      margin:{top:compatta?6:27,left:margine,right:margine,bottom:13},
       theme:'grid',tableWidth:area,
       styles:{font:'helvetica',fontSize,cellPadding:padding,valign:'middle',lineColor:[174,180,174],lineWidth:.13,overflow:'linebreak',textColor:[19,19,19],lineHeightFactor:1.0,minCellHeight:formato==='a4'?5:5.5},
       headStyles:{fillColor:[27,94,53],textColor:[255,255,255],fontStyle:'bold',halign:'center',valign:'middle',fontSize:Math.max(4.5,fontSize+.25),cellPadding:Math.max(.7,padding)},
@@ -2694,7 +2716,7 @@ function creaDocumentoPdfTurni(dati){
           disegnaTurniColoratiPdf(doc,data.cell,cella,dati.categoria,fontSize);
         }
       },
-      didDrawPage:()=>disegnaTestata(),
+      didDrawPage:()=>{if(!compatta)disegnaTestata();},
       pageBreak:'auto',rowPageBreak:'avoid'
     });
 
@@ -2736,6 +2758,7 @@ async function scaricaPdfTurniAppalto(categoria='totale',bottone=null){
     await new Promise(resolve=>requestAnimationFrame(()=>resolve()));
     const dati=categoria==='totale'?datiStampaTurniAppalto():datiStampaReparto(categoria);
     if(!dati||!dati.righe.length){statoDownloadPdf('Non ci sono turni da esportare per questa stampa.','errore');return;}
+    await preparaPrevisioniPdf(dati);
     const doc=creaDocumentoPdfTurni(dati);
     if(!doc){statoDownloadPdf('Il generatore PDF non è disponibile. Ricarica la pagina.','errore');return;}
     const meta=REPARTI_PDF_APPALTO.find(r=>r.id===categoria),nome=meta?meta.file:'Appalto_Completo';
@@ -2759,7 +2782,8 @@ async function scaricaPdfTurniReparti(bottone=null){
       try{
         statoDownloadPdf('Preparazione: '+meta.titolo+'…');
         const dati=datiStampaReparto(meta.id);if(!dati?.righe.length)continue;
-        const doc=creaDocumentoPdfTurni(dati);if(!doc)continue;
+        await preparaPrevisioniPdf(dati);
+    const doc=creaDocumentoPdfTurni(dati);if(!doc)continue;
         zip.file('Turni_Cassano_'+meta.file+'_'+APPALTO_LUNEDI+'.pdf',doc.output('arraybuffer'));quanti++;
         await new Promise(resolve=>setTimeout(resolve,0));
       }catch(error){
