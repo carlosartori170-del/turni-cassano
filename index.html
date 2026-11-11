@@ -1,5 +1,5 @@
 <!DOCTYPE html>
-<!-- build-pages: pdf-ortofrutta-dimensioni-originali-20261111 -->
+<!-- build-pages: pdf-ortofrutta-verticale-fascia-unica-20261111 -->
 <html lang="it">
 <head>
 <meta charset="UTF-8">
@@ -2539,12 +2539,42 @@ function testoMansioneTurnoPdf(turno,categoria='totale'){
   if(/economia/i.test(reparto))return attivita||'Attività';
   return reparto+(attivita?' - '+attivita:'');
 }
-function orientamentoPdfTurni(categoria){return 'landscape';}
+function orientamentoPdfTurni(categoria){return categoria==='ortofrutta'?'portrait':'landscape';}
 function formatoPdfTurni(categoria){
   return ['forno','lavaggio','ricevimento'].includes(categoria)?'a4':'a3';
 }
+function testoCompattoFasciaPdf(doc,turno,spazio){
+  const reparto=testoPulitoStampa(turno?.reparto),attivita=testoPulitoStampa(turno?.attivita);
+  const mansioni={ventilazione:'Vent.',ricevimento:'Ricev.','ricevimento ortofrutta':'Ricev.',legaggio:'Leg.',navetta:'Nav.','navetta ortofrutta':'Nav.',pulizie:'Pul.','allestimento sala':'Allest.',formazione:'Form.',
+    'gestione baie primo giro':'Baie 1°','carico frutta':'Frutta','sacchi posta':'Posta','spostamenti cella':'Spost.',
+    'polymer pasticceria':'Pol. past.','posta giorno':'Posta g.',abbassamenti:'Abbass.',navettaggio:'Nav.',stoccaggio:'Stocc.',
+    'lavaggio macchina':'Macchina',compattatori:'Compatt.','gestione reparto':'Gest. rep.',muletto:'Muletto'};
+  const reparti={ortofrutta:'Ortof.',grocery:'Gro.',lavaggio:'Lav.',carico:'Car.',vuoti:'Vuoti'};
+  const forno=categoriaDirettaPdfTurno(turno)==='forno',economia=/economia/i.test(reparto);
+  let mansione=mansioni[attivita.toLocaleLowerCase('it-IT')]||attivita;
+  const compone=rep=>forno?'Lav. forno':(economia?mansione:rep+(mansione?' '+mansione:''));
+  let testo=compone(reparto);
+  if(doc.getTextWidth(testo)<=spazio)return testo;
+  const rep=reparti[reparto.toLocaleLowerCase('it-IT')]||reparto;
+  testo=compone(rep);
+  if(doc.getTextWidth(testo)<=spazio)return testo;
+  // Per nuove mansioni non ancora nel dizionario, abbrevia le parole senza ridurre il carattere.
+  mansione=mansione.split(/\s+/).map(p=>p.length>4?p.slice(0,4)+'.':p).join(' ');
+  testo=compone(rep);
+  while(testo.length>1&&doc.getTextWidth(testo)>spazio)testo=testo.slice(0,-2).trimEnd()+'.';
+  return testo;
+}
 function misureFasciaPdf(doc,turno,larghezza,fontBase,categoria='totale'){
-  const fontOra=fontBase,fontTesto=fontBase*(categoria==='ortofrutta'?.86:.92),padding=categoria==='ortofrutta'?1:1.25;
+  if(categoria==='ortofrutta'){
+    const padding=.8,fontOra=fontBase,fontTesto=fontBase;
+    const orario=turno.inizio+'-'+turno.fine;
+    doc.setFont('helvetica','bold');doc.setFontSize(fontOra);
+    const larghezzaOra=doc.getTextWidth(orario),spazioTesto=larghezza-padding*2-larghezzaOra-.8;
+    doc.setFont('helvetica','normal');doc.setFontSize(fontTesto);
+    const testo=testoCompattoFasciaPdf(doc,turno,spazioTesto),passo=fontBase*.352778*1.15;
+    return{unica:true,fontOra,fontTesto,padding,orario,larghezzaOra,testo,passo,altezza:padding*2+passo};
+  }
+  const fontOra=fontBase,fontTesto=fontBase*.92,padding=1.25;
   doc.setFont('helvetica','normal');doc.setFontSize(fontTesto);
   const spazio=larghezza-padding*2;
   const righe=doc.splitTextToSize(testoMansioneTurnoPdf(turno,categoria),spazio);
@@ -2562,6 +2592,12 @@ function disegnaTurniColoratiPdf(doc,cellaPdf,cellaDati,categoria,fontBase=9){
     doc.setFillColor(...stile.rgb);doc.rect(x+.12,y+.12,w-.24,Math.max(0,altezza-.24),'F');
     if(i){doc.setDrawColor(174,180,174);doc.setLineWidth(.12);doc.line(x,y,x+w,y);}
     doc.setTextColor(...(stile.textRgb||[19,19,19]));
+    if(m.unica){
+      const yTesto=y+m.padding+m.passo*.8;
+      doc.setFont('helvetica','bold');doc.setFontSize(m.fontOra);doc.text(m.orario,x+m.padding,yTesto);
+      doc.setFont('helvetica','normal');doc.setFontSize(m.fontTesto);doc.text(m.testo,x+m.padding+m.larghezzaOra+.8,yTesto);
+      y+=altezza;return;
+    }
     doc.setFont('helvetica','bold');doc.setFontSize(m.fontOra);
     doc.text(turno.inizio+'-'+turno.fine,x+m.padding,y+m.padding+m.passoOra*.8);
     doc.setFont('helvetica','normal');doc.setFontSize(m.fontTesto);
@@ -2640,7 +2676,7 @@ function creaDocumentoPdfTurni(dati){
     const doc=new jsPDF({orientation:orientamentoPdfTurni(dati.categoria),unit:'mm',format:formato,compress:true});
     const larghezzaPagina=doc.internal.pageSize.getWidth(),altezzaPagina=doc.internal.pageSize.getHeight();
     const margine=6,area=larghezzaPagina-margine*2;
-    const larghezzaNome=formato==='a4'?43:58,larghezzaGiorno=(area-larghezzaNome)/7;
+    const larghezzaNome=dati.categoria==='ortofrutta'?40:formato==='a4'?43:58,larghezzaGiorno=(area-larghezzaNome)/7;
     const stiliColonne={0:{cellWidth:larghezzaNome,fontStyle:'bold',fillColor:[242,243,240]}};
     for(let i=1;i<=7;i++)stiliColonne[i]={cellWidth:larghezzaGiorno};
 
@@ -2701,9 +2737,9 @@ function creaDocumentoPdfTurni(dati){
     return doc;
   };
 
-  // Ortofrutta: ripristina i 6,65 pt della versione originale, senza tagliare le mansioni.
+  // Ortofrutta: caratteri leggermente più grandi, orario e mansione su una sola riga.
   // Gli altri reparti mantengono le dimensioni già in uso.
-  return costruisciDocumento(dati.categoria==='ortofrutta'?6.65:formato==='a4'?8.5:9,dati.categoria==='ortofrutta'?1:1.25);
+  return costruisciDocumento(dati.categoria==='ortofrutta'?7.2:formato==='a4'?8.5:9,dati.categoria==='ortofrutta'?1:1.25);
 }
 function statoDownloadPdf(messaggio,tipo='info',link=null,nomeFile=''){
   const el=document.getElementById('stampa-download-stato');if(!el)return;
