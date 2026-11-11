@@ -1,5 +1,5 @@
 <!DOCTYPE html>
-<!-- build-pages: weekly-grid-refresh-20261111 -->
+<!-- build-pages: cross-computer-week-loading-20261111 -->
 <html lang="it">
 <head>
 <meta charset="UTF-8">
@@ -524,7 +524,8 @@ async function avviaSessione(sessione){
   SESSIONE_CASSANO=sessione;document.getElementById('auth-screen').style.display='none';document.getElementById('app').style.display='block';statoSync(sessione.user.email||'Responsabile autorizzato');
   await Promise.all([caricaDipendenti(),caricaCatalogoAttivita()]);
   await caricaStatoCassanoSupabase();
-  showTab('config');
+  if(CASSANO_TAB_ATTIVA==='appalto')caricaSettimanaAppalto(APPALTO_LUNEDI);
+  else if(!CASSANO_TAB_ATTIVA)showTab('config');
 }
 async function avviaApp(){
   if(!projectIdValido()){mostraLogin('Project ID Supabase non valido.');return;}
@@ -858,6 +859,7 @@ let APPALTO_SETTIMANE=caricaSettimaneAppalto();
 let APPALTO_BOZZE_META=caricaBozzeMetaAppalto();
 let APPALTO_UNDO=caricaUndoAppalto();
 let APPALTO_VERSIONI_REMOTE=new Map();
+const APPALTO_LETTURE_SETTIMANA=new Map();
 let APPALTO_AUTOSAVE_TIMER=null;
 let APPALTO_SALVATAGGIO_IN_CORSO=false;
 const APPALTO_CREAZIONI_IN_CORSO=new Set();
@@ -931,7 +933,7 @@ function annullaUltimaModificaAppalto(){
   aggiornaStatoAutosaveAppalto(ok?'Ultima modifica annullata · bozza locale aggiornata':'Ultima modifica annullata · memoria locale non disponibile. Mantieni aperta la pagina.');programmaSalvataggioAutomaticoAppalto();renderCorpoAppalto();
 }
 function caricaMappatureAppalto(){try{const m=JSON.parse(localStorage.getItem(APPALTO_MAPPING_KEY)||'{}');return{reparti:m.reparti||{},attivita:m.attivita||{}};}catch(_){return{reparti:{},attivita:{}};}}
-function salvaMappatureAppalto(){localStorage.setItem(APPALTO_MAPPING_KEY,JSON.stringify(APPALTO_MAPPING));}
+function salvaMappatureAppalto(){scriviLocaleAppalto(APPALTO_MAPPING_KEY,JSON.stringify(APPALTO_MAPPING));}
 // Letture ordinate e complete, anche quando il limite Data API è inferiore alla pagina richiesta.
 async function leggiTurniCassanoCompleti(lunedi=null,colonne='*'){
   const righe=[],visti=new Set();let totale=null;
@@ -963,16 +965,16 @@ async function caricaStatoCassanoSupabase(){
     sb.from('CatalogoProgrammazioneCassano').select('*').eq('ID_Magazzino',ID_MAGAZZINO_CASSANO),
     sb.from('RepartiPrincipaliCassano').select('*').eq('ID_Magazzino',ID_MAGAZZINO_CASSANO)
   ]);
-  const errore=cfg.error||map.error||settimane.error||turni.error||catalogo.error||repartiPrincipali.error;
+  const errore=settimane.error||turni.error;
   if(errore){statoSync('Errore di caricamento');toast('Dati Cassano non caricati: '+errore.message,'err');return;}
-  if(cfg.data?.Dati){CONFIG_APPALTO={...structuredClone(DEFAULT_CONFIG_APPALTO),...cfg.data.Dati};localStorage.setItem(CONFIG_APPALTO_KEY,JSON.stringify(CONFIG_APPALTO));}
+  if(cfg.data?.Dati){CONFIG_APPALTO={...structuredClone(DEFAULT_CONFIG_APPALTO),...cfg.data.Dati};scriviLocaleAppalto(CONFIG_APPALTO_KEY,JSON.stringify(CONFIG_APPALTO));}
   if((map.data||[]).length){
     APPALTO_MAPPING={reparti:{},attivita:{}};
     map.data.forEach(m=>{if(m.Tipo==='reparto')APPALTO_MAPPING.reparti[m.ChiaveOrigine]=m.ID_Reparto;else if(m.Tipo==='attivita')APPALTO_MAPPING.attivita[m.ChiaveOrigine]=m.ID_Attivita;});
     salvaMappatureAppalto();
   }
-  CATALOGO_PROGRAMMAZIONE_CASSANO=catalogo.data||[];
-  REPARTI_PRINCIPALI_CASSANO=new Map((repartiPrincipali.data||[]).map(x=>[String(x.ID_Dipendente),Number(x.ID_Reparto)]));
+  if(!catalogo.error)CATALOGO_PROGRAMMAZIONE_CASSANO=catalogo.data||[];
+  if(!repartiPrincipali.error)REPARTI_PRINCIPALI_CASSANO=new Map((repartiPrincipali.data||[]).map(x=>[String(x.ID_Dipendente),Number(x.ID_Reparto)]));
   if((settimane.data||[]).length){
     const remote={};(settimane.data||[]).forEach(s=>{APPALTO_VERSIONI_REMOTE.set(s.Lunedi,s.AggiornatoIl||null);remote[s.Lunedi]={stato:s.Stato,origine:s.OrigineLunedi?'Settimana precedente '+s.OrigineLunedi:'Supabase',righe:[]};});
     (turni.data||[]).forEach(t=>{const s=remote[t.Settimana];if(!s)return;s.righe.push({uid:t.UID,giorno:Number(t.GiornoIndice),nome:t.NomeOrigine||'',id_dipendente:t.ID_Dipendente,reparto:t.RepartoOrigine||'',id_reparto:t.ID_Reparto,attivita:t.AttivitaOrigine||'',id_attivita:t.ID_Attivita,id_catalogo_programmazione:t.ID_CatalogoProgrammazione||null,origine_nome:t.NomeOrigine||'',origine_reparto:t.RepartoOrigine||'',origine_attivita:t.AttivitaOrigine||'',inizio:t.OraInizio?String(t.OraInizio).slice(0,5):'',fine:t.OraFine?String(t.OraFine).slice(0,5):'',tipo:t.Tipo||'standard',sostituisce:t.UIDSostituito||undefined,note:t.Note||''});});
@@ -982,7 +984,9 @@ async function caricaStatoCassanoSupabase(){
       APPALTO_SETTIMANE[lunedi]=dati;
     });salvaSettimaneAppalto({silenzioso:true});
   }
-  statoSync('Connesso a Supabase');
+  const avvisi=[cfg,map,catalogo,repartiPrincipali].filter(r=>r.error);
+  statoSync(avvisi.length?'Settimane caricate · configurazione parziale':'Connesso a Supabase');
+  if(avvisi.length)toast('Turni caricati. Alcuni dati di configurazione non sono disponibili: '+avvisi.map(r=>r.error.message).join('; '),'warn');
 }
 function righeMappatureSupabase(){
   const ora=new Date().toISOString(),uid=SESSIONE_CASSANO?.user?.id||null,righe=[];
@@ -1002,6 +1006,32 @@ function turnoConRepartoAttivitaValido(r){
 }
 function rigaPianificataDaSupabase(t){
   return {uid:t.UID,giorno:Number(t.GiornoIndice),nome:t.NomeOrigine||'',id_dipendente:t.ID_Dipendente,reparto:t.RepartoOrigine||'',id_reparto:t.ID_Reparto,attivita:t.AttivitaOrigine||'',id_attivita:t.ID_Attivita,id_catalogo_programmazione:t.ID_CatalogoProgrammazione||null,origine_nome:t.NomeOrigine||'',origine_reparto:t.RepartoOrigine||'',origine_attivita:t.AttivitaOrigine||'',inizio:t.OraInizio?String(t.OraInizio).slice(0,5):'',fine:t.OraFine?String(t.OraFine).slice(0,5):'',tipo:t.Tipo||'standard',sostituisce:t.UIDSostituito||undefined,note:t.Note||''};
+}
+async function sincronizzaSettimanaCassano(lunedi){
+  if(!SESSIONE_CASSANO||!projectIdValido())return{ok:false,messaggio:'Sessione Supabase non valida.'};
+  const richiesta=(APPALTO_LETTURE_SETTIMANA.get(lunedi)||0)+1,utente=SESSIONE_CASSANO.user.id;
+  APPALTO_LETTURE_SETTIMANA.set(lunedi,richiesta);
+  const contenutoIniziale=JSON.stringify(APPALTO_SETTIMANE[lunedi]);
+  try{
+    const[testata,turni]=await Promise.all([
+      sb.from('SettimaneCassano').select('*').eq('Lunedi',lunedi).eq('ID_Magazzino',ID_MAGAZZINO_CASSANO).maybeSingle(),
+      leggiTurniCassanoCompleti(lunedi)
+    ]);
+    if(APPALTO_LETTURE_SETTIMANA.get(lunedi)!==richiesta||SESSIONE_CASSANO?.user?.id!==utente)return{ok:false,superata:true};
+    const errore=testata.error||turni.error;
+    if(errore)return{ok:false,messaggio:'Impossibile caricare la settimana dall’archivio: '+errore.message};
+    if(APPALTO_SETTIMANE[lunedi]&&(APPALTO_BOZZE_META[lunedi]?.pending||APPALTO_SALVATAGGIO_IN_CORSO||JSON.stringify(APPALTO_SETTIMANE[lunedi])!==contenutoIniziale))return{ok:true,bozza:true};
+    if(!testata.data){
+      if(turni.data.length)return{ok:false,messaggio:'I turni sono presenti ma la testata della settimana non è disponibile. Non creare altre copie.'};
+      return{ok:true,presente:false};
+    }
+    APPALTO_SETTIMANE[lunedi]={stato:testata.data.Stato,origine:testata.data.OrigineLunedi?'Settimana precedente '+testata.data.OrigineLunedi:'Supabase',righe:turni.data.map(rigaPianificataDaSupabase)};
+    APPALTO_VERSIONI_REMOTE.set(lunedi,testata.data.AggiornatoIl||null);
+    APPALTO_BOZZE_META[lunedi]={...(APPALTO_BOZZE_META[lunedi]||{}),pending:false};
+    normalizzaRighePlanner(APPALTO_SETTIMANE[lunedi]);
+    salvaSettimaneAppalto({silenzioso:true});
+    return{ok:true,presente:true,numeroRighe:turni.data.length};
+  }catch(error){return{ok:false,messaggio:'Impossibile caricare la settimana dall’archivio: '+(error?.message||error)};}
 }
 async function salvaSettimanaSupabaseBase(motivoStorico='salvataggio settimana',lunedi=APPALTO_LUNEDI){
   const locale=APPALTO_SETTIMANE[lunedi];if(!locale){toast('Prima crea la settimana.','warn');return false;}
@@ -1129,7 +1159,7 @@ function renderProgrammazioneAppaltoTab(){
     <div id="appalto-msg"></div><div id="appalto-tabs"></div><div id="appalto-of"></div><div id="appalto-controlli"></div><div id="appalto-filtri"></div><div id="appalto-personale"></div><div id="appalto-body"></div></div>`;
   caricaSettimanaAppalto(APPALTO_LUNEDI);
 }
-function caricaSettimanaAppalto(lunedi){
+function caricaSettimanaAppalto(lunedi,opzioni={}){
   APPALTO_LUNEDI=lunediSettimana(lunedi);APPALTO_GIORNO=0;APPALTO_ASSENZE=new Map();APPALTO_ASSENZE_VERIFICATE=false;APPALTO_MSG='';APPALTO_MODALITA_REPLICA=false;APPALTO_RIGHE_REPLICA.clear();APPALTO_PERSONE_REPLICA_SETTIMANA.clear();APPALTO_DESTINATARI_COPIA_SETTIMANA.clear();
   APPALTO_OF_DATA={previsioni:{},obiettivi:{},percLegaggio:0,percNavetta:0,caricato:false};
   const dataInput=document.getElementById('appalto-lun');if(dataInput)dataInput.value=APPALTO_LUNEDI;
@@ -1147,6 +1177,21 @@ function caricaSettimanaAppalto(lunedi){
     if(CASSANO_TAB_ATTIVA==='appalto'&&APPALTO_LUNEDI===lunediCaricato)renderCorpoAppalto();
   }).catch(error=>{console.error('Caricamento copertura Ortofrutta',error);});
   if(settimana)controllaAssenzeAppalto(true).catch(error=>{console.error('Caricamento assenze',error);});
+  if(opzioni.ricaricaRemoto===false)return;
+  if(!settimana)aggiornaStatoAutosaveAppalto('Caricamento settimana dall’archivio…');
+  return sincronizzaSettimanaCassano(lunediCaricato).then(esito=>{
+    if(esito.superata||APPALTO_LUNEDI!==lunediCaricato||CASSANO_TAB_ATTIVA!=='appalto')return;
+    if(!esito.ok){
+      APPALTO_MSG='Errore: '+esito.messaggio;
+      aggiornaStatoAutosaveAppalto('Caricamento non riuscito · riprova selezionando la settimana');
+      renderCorpoAppalto();return;
+    }
+    renderTabsAppalto();
+    if(APPALTO_SETTIMANE[lunediCaricato])controllaAssenzeAppalto(true).catch(error=>{console.error('Caricamento assenze',error);});
+    if(esito.bozza)aggiornaStatoAutosaveAppalto('Modifiche locali da salvare · bozza mantenuta');
+    else if(esito.presente)aggiornaStatoAutosaveAppalto('Settimana caricata dall’archivio · '+esito.numeroRighe+' righe');
+    else if(!APPALTO_SETTIMANE[lunediCaricato])aggiornaStatoAutosaveAppalto('Settimana non ancora creata');
+  }).catch(error=>{console.error('Caricamento settimana Cassano',error);});
 }
 async function caricaDatiOrtofruttaAppalto(){
   const lunediCaricato=APPALTO_LUNEDI;
@@ -1940,7 +1985,7 @@ function renderCorpoAppalto(){
 async function creaDaSettimanaPrecedente(){
   const lunedi=APPALTO_LUNEDI;
   if(!lunedi){toast('Seleziona prima la settimana.','warn');return;}
-  if(APPALTO_SETTIMANE[lunedi]){toast('Settimana già creata.','warn');return;}
+  if(APPALTO_SETTIMANE[lunedi]){caricaSettimanaAppalto(lunedi);toast('Settimana già creata. Apro la programmazione esistente.','warn');return;}
   if(APPALTO_CREAZIONI_IN_CORSO.has(lunedi)){toast('Creazione della settimana già in corso.','warn');return;}
   if(!SESSIONE_CASSANO||!projectIdValido()){toast('Sessione Supabase non valida.','err');return;}
   APPALTO_CREAZIONI_IN_CORSO.add(lunedi);
@@ -1950,9 +1995,20 @@ async function creaDaSettimanaPrecedente(){
     sb.from('TurniCassanoPianificati').select('UID').eq('Settimana',lunedi).limit(1)
   ]);
   if(eTestata||eTurni){toast('Impossibile verificare se la settimana esiste. Creazione annullata: '+(eTestata||eTurni).message,'err');return;}
-  if(testata||presenti?.length||APPALTO_SETTIMANE[lunedi]){toast('Settimana già creata.','warn');return;}
+  if(testata||presenti?.length||APPALTO_SETTIMANE[lunedi]){
+    const esito=await sincronizzaSettimanaCassano(lunedi);
+    if(!esito.ok){if(!esito.superata)toast(esito.messaggio,'err');return;}
+    if(APPALTO_LUNEDI===lunedi&&CASSANO_TAB_ATTIVA==='appalto')caricaSettimanaAppalto(lunedi,{ricaricaRemoto:false});
+    toast('Settimana già creata. Programmazione esistente caricata.','warn');return;
+  }
   if(APPALTO_LUNEDI!==lunedi){toast('Settimana selezionata cambiata: creazione annullata.','warn');return;}
   const precedente=addGiorni(lunedi,-7);let base=APPALTO_SETTIMANE[precedente];
+  if(!base){
+    const esito=await sincronizzaSettimanaCassano(precedente);
+    if(!esito.ok){if(!esito.superata)toast(esito.messaggio,'err');return;}
+    if(APPALTO_LUNEDI!==lunedi||APPALTO_SETTIMANE[lunedi])return;
+    base=APPALTO_SETTIMANE[precedente];
+  }
   if(!base&&precedente==='2026-09-14'){importaPdfComeSettimana(precedente);base=APPALTO_SETTIMANE[precedente];}
   if(!base){toast('La settimana precedente non è disponibile localmente.','warn');return;}
   let seq=0;const righe=base.righe.filter(r=>r.tipo!=='sostituzione').map(r=>({...structuredClone(r),uid:(r.tipo==='riposo'?'riposo-':'std-')+Date.now()+'-'+seq++,tipo:r.tipo==='riposo'?'riposo':'standard',sostituisce:undefined}));
