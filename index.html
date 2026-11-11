@@ -1,5 +1,5 @@
 <!DOCTYPE html>
-<!-- build-pages: week-copy-guard-save-cleanup-20261111 -->
+<!-- build-pages: week-reset-link-20261111 -->
 <html lang="it">
 <head>
 <meta charset="UTF-8">
@@ -831,6 +831,29 @@ const APPALTO_MAPPING_KEY='nexus_mappature_appalto_locale_v1';
 const APPALTO_BOZZE_META_KEY='nexus_programmazione_appalto_bozze_meta_v1';
 const APPALTO_UNDO_KEY='nexus_programmazione_appalto_undo_v1';
 const APPALTO_AUTOSAVE_ATTESA=25000;
+// Azzeramento locale richiesto esplicitamente tramite il collegamento di ripartenza.
+function pulisciBozzaCassanoDaLink(){
+  const url=new URL(window.location.href),settimana='2026-11-16',reset='20261111-cassano-16';
+  if(url.searchParams.get('reset_settimana')!==settimana||url.searchParams.get('reset_id')!==reset)return'';
+  const completato='nexus_cassano_reset_locale_'+reset;
+  try{
+    if(!localStorage.getItem(completato)){
+      const settimane=JSON.parse(localStorage.getItem(APPALTO_STORAGE_KEY)||'{}');
+      const meta=JSON.parse(localStorage.getItem(APPALTO_BOZZE_META_KEY)||'{}');
+      const undo=JSON.parse(localStorage.getItem(APPALTO_UNDO_KEY)||'[]');
+      delete settimane[settimana];delete meta[settimana];
+      const undoPulito=Array.isArray(undo)?undo.map(stato=>{const copia={...stato};delete copia[settimana];return copia;}):[];
+      localStorage.setItem(APPALTO_STORAGE_KEY,JSON.stringify(settimane));
+      localStorage.setItem(APPALTO_BOZZE_META_KEY,JSON.stringify(meta));
+      localStorage.setItem(APPALTO_UNDO_KEY,JSON.stringify(undoPulito));
+      localStorage.setItem(completato,new Date().toISOString());
+    }
+    url.searchParams.delete('reset_settimana');url.searchParams.delete('reset_id');
+    window.history.replaceState(null,'',url.href);
+  }catch(error){console.error('Azzeramento bozza Cassano',error);toast('Impossibile azzerare la vecchia bozza del 16 novembre su questo dispositivo: '+(error?.message||error),'err');}
+  return settimana;
+}
+const APPALTO_SETTIMANA_DA_RESET=pulisciBozzaCassanoDaLink();
 let APPALTO_SETTIMANE=caricaSettimaneAppalto();
 let APPALTO_BOZZE_META=caricaBozzeMetaAppalto();
 let APPALTO_UNDO=caricaUndoAppalto();
@@ -840,7 +863,7 @@ let APPALTO_SALVATAGGIO_IN_CORSO=false;
 const APPALTO_CREAZIONI_IN_CORSO=new Set();
 let APPALTO_SALVATAGGIO_STATO='Nessuna modifica da salvare';
 let APPALTO_MAPPING=caricaMappatureAppalto();
-let APPALTO_LUNEDI='';
+let APPALTO_LUNEDI=APPALTO_SETTIMANA_DA_RESET||'';
 let APPALTO_GIORNO=0;
 let APPALTO_REPARTO='Tutti';
 let APPALTO_SOLO_ASSENTI=false;
