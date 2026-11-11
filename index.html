@@ -1,5 +1,5 @@
 <!DOCTYPE html>
-<!-- build-pages: week-reset-link-20261111 -->
+<!-- build-pages: weekly-grid-refresh-20261111 -->
 <html lang="it">
 <head>
 <meta charset="UTF-8">
@@ -887,15 +887,35 @@ function caricaSettimaneAppalto(){try{return JSON.parse(localStorage.getItem(APP
 function caricaBozzeMetaAppalto(){try{return JSON.parse(localStorage.getItem(APPALTO_BOZZE_META_KEY)||'{}');}catch(_){return{};}}
 function caricaUndoAppalto(){try{const dati=JSON.parse(localStorage.getItem(APPALTO_UNDO_KEY)||'[]');return Array.isArray(dati)?dati:[];}catch(_){return[];}}
 function aggiornaStatoAutosaveAppalto(testo){APPALTO_SALVATAGGIO_STATO=testo;const el=document.getElementById('appalto-autosalvataggio');if(el)el.textContent=testo;const btn=document.getElementById('appalto-annulla');if(btn)btn.disabled=!APPALTO_UNDO.length;}
+function scriviLocaleAppalto(chiave,valore){
+  while(true){
+    try{localStorage.setItem(chiave,typeof valore==='function'?valore():valore);return true;}
+    catch(error){
+      const quota=error?.name==='QuotaExceededError'||error?.name==='NS_ERROR_DOM_QUOTA_REACHED'||error?.code===22||error?.code===1014;
+      if(!quota||!APPALTO_UNDO.length){console.warn('Memoria locale programmazione non disponibile',error);return false;}
+      // Sacrificare prima l'annulla più vecchio; mai cancellare settimane o bozze pendenti.
+      APPALTO_UNDO.shift();
+      try{if(APPALTO_UNDO.length)localStorage.setItem(APPALTO_UNDO_KEY,JSON.stringify(APPALTO_UNDO));else localStorage.removeItem(APPALTO_UNDO_KEY);}
+      catch(_){try{localStorage.removeItem(APPALTO_UNDO_KEY);}catch(_){} }
+    }
+  }
+}
 function salvaSettimaneAppalto(opzioni={}){
-  const precedente=localStorage.getItem(APPALTO_STORAGE_KEY)||'{}',attuale=JSON.stringify(APPALTO_SETTIMANE);
-  if(precedente!==attuale&&!opzioni.silenzioso){
-    try{APPALTO_UNDO.push(JSON.parse(precedente));if(APPALTO_UNDO.length>20)APPALTO_UNDO.shift();localStorage.setItem(APPALTO_UNDO_KEY,JSON.stringify(APPALTO_UNDO));}catch(_){}
-    if(APPALTO_LUNEDI){APPALTO_BOZZE_META[APPALTO_LUNEDI]={...(APPALTO_BOZZE_META[APPALTO_LUNEDI]||{}),modificatoIl:new Date().toISOString(),pending:true};localStorage.setItem(APPALTO_BOZZE_META_KEY,JSON.stringify(APPALTO_BOZZE_META));}
-    aggiornaStatoAutosaveAppalto('Bozza salvata su questo computer · salvataggio automatico tra pochi secondi');
+  let precedente=null;try{precedente=localStorage.getItem(APPALTO_STORAGE_KEY)||'{}';}catch(error){console.warn('Lettura bozza locale',error);}
+  const attuale=JSON.stringify(APPALTO_SETTIMANE),modificata=precedente!==attuale&&!opzioni.silenzioso;
+  if(modificata){
+    try{if(precedente!==null)APPALTO_UNDO.push(JSON.parse(precedente));if(APPALTO_UNDO.length>20)APPALTO_UNDO.shift();}catch(_){}
+    if(APPALTO_LUNEDI)APPALTO_BOZZE_META[APPALTO_LUNEDI]={...(APPALTO_BOZZE_META[APPALTO_LUNEDI]||{}),modificatoIl:new Date().toISOString(),pending:true};
+  }
+  // Bozza e stato pendente hanno precedenza sulle copie per Annulla modifica.
+  const metaOk=scriviLocaleAppalto(APPALTO_BOZZE_META_KEY,JSON.stringify(APPALTO_BOZZE_META));
+  const bozzaOk=scriviLocaleAppalto(APPALTO_STORAGE_KEY,attuale);
+  if(modificata){
+    scriviLocaleAppalto(APPALTO_UNDO_KEY,()=>JSON.stringify(APPALTO_UNDO));
+    aggiornaStatoAutosaveAppalto(metaOk&&bozzaOk?'Bozza salvata su questo computer · salvataggio automatico tra pochi secondi':'Memoria locale non disponibile · modifica visibile, salvataggio su Supabase in attesa. Mantieni aperta la pagina.');
     programmaSalvataggioAutomaticoAppalto();
   }
-  localStorage.setItem(APPALTO_STORAGE_KEY,attuale);
+  return metaOk&&bozzaOk;
 }
 function programmaSalvataggioAutomaticoAppalto(){
   clearTimeout(APPALTO_AUTOSAVE_TIMER);
@@ -905,9 +925,10 @@ function programmaSalvataggioAutomaticoAppalto(){
 }
 function annullaUltimaModificaAppalto(){
   const stato=APPALTO_UNDO.pop();if(!stato){toast('Non ci sono modifiche da annullare.','warn');return;}
-  APPALTO_SETTIMANE=stato;localStorage.setItem(APPALTO_STORAGE_KEY,JSON.stringify(APPALTO_SETTIMANE));localStorage.setItem(APPALTO_UNDO_KEY,JSON.stringify(APPALTO_UNDO));
-  if(APPALTO_LUNEDI){APPALTO_BOZZE_META[APPALTO_LUNEDI]={...(APPALTO_BOZZE_META[APPALTO_LUNEDI]||{}),modificatoIl:new Date().toISOString(),pending:true};localStorage.setItem(APPALTO_BOZZE_META_KEY,JSON.stringify(APPALTO_BOZZE_META));}
-  aggiornaStatoAutosaveAppalto('Ultima modifica annullata · bozza locale aggiornata');programmaSalvataggioAutomaticoAppalto();renderCorpoAppalto();
+  APPALTO_SETTIMANE=stato;
+  if(APPALTO_LUNEDI)APPALTO_BOZZE_META[APPALTO_LUNEDI]={...(APPALTO_BOZZE_META[APPALTO_LUNEDI]||{}),modificatoIl:new Date().toISOString(),pending:true};
+  const ok=salvaSettimaneAppalto({silenzioso:true});scriviLocaleAppalto(APPALTO_UNDO_KEY,()=>JSON.stringify(APPALTO_UNDO));
+  aggiornaStatoAutosaveAppalto(ok?'Ultima modifica annullata · bozza locale aggiornata':'Ultima modifica annullata · memoria locale non disponibile. Mantieni aperta la pagina.');programmaSalvataggioAutomaticoAppalto();renderCorpoAppalto();
 }
 function caricaMappatureAppalto(){try{const m=JSON.parse(localStorage.getItem(APPALTO_MAPPING_KEY)||'{}');return{reparti:m.reparti||{},attivita:m.attivita||{}};}catch(_){return{reparti:{},attivita:{}};}}
 function salvaMappatureAppalto(){localStorage.setItem(APPALTO_MAPPING_KEY,JSON.stringify(APPALTO_MAPPING));}
@@ -1867,8 +1888,8 @@ function renderCorpoAppalto(){
   const tutteGiorno=settimana.righe.filter(r=>r.giorno===APPALTO_GIORNO);
   if(APPALTO_VISTA_SETTIMANA){
     const of=document.getElementById('appalto-of'),personale=document.getElementById('appalto-personale');if(of)of.innerHTML='';if(personale)personale.innerHTML='';
-    renderCoperturaSettimanaleAppalto(settimana.righe);renderFiltriProgrammazioneAppalto(settimana.righe);
-    body.innerHTML=renderVistaSettimanaleAppalto(settimana);ripristinaPosizioneGrigliaSettimanale(posizioneGriglia);aggiornaComandiReplica();return;
+    body.innerHTML=renderVistaSettimanaleAppalto(settimana);ripristinaPosizioneGrigliaSettimanale(posizioneGriglia);aggiornaComandiReplica();
+    renderCoperturaSettimanaleAppalto(settimana.righe);renderFiltriProgrammazioneAppalto(settimana.righe);return;
   }
   renderRiepilogoOrtofruttaAppalto(tutteGiorno);renderControlliRepartiAppalto(settimana.righe);renderFiltriProgrammazioneAppalto(tutteGiorno);
   const pannelloPersonale=document.getElementById('appalto-personale');if(pannelloPersonale)pannelloPersonale.innerHTML='';
@@ -2677,7 +2698,7 @@ async function salvaSettimanaSupabase(motivoStorico='salvataggio settimana'){
     const ok=await salvaSettimanaSupabaseBase(motivoStorico,lunedi);
     if(ok){
       const altreModifiche=JSON.stringify(APPALTO_SETTIMANE[lunedi])!==contenutoInviato;
-      if(APPALTO_BOZZE_META[lunedi]){APPALTO_BOZZE_META[lunedi].pending=altreModifiche;APPALTO_BOZZE_META[lunedi].salvatoIl=new Date().toISOString();localStorage.setItem(APPALTO_BOZZE_META_KEY,JSON.stringify(APPALTO_BOZZE_META));}
+      if(APPALTO_BOZZE_META[lunedi]){APPALTO_BOZZE_META[lunedi].pending=altreModifiche;APPALTO_BOZZE_META[lunedi].salvatoIl=new Date().toISOString();scriviLocaleAppalto(APPALTO_BOZZE_META_KEY,JSON.stringify(APPALTO_BOZZE_META));}
       if(APPALTO_LUNEDI===lunedi){
         aggiornaStatoAutosaveAppalto(altreModifiche?'Modifiche più recenti in bozza · in attesa di salvataggio':(automatico?'Salvato automaticamente':'Salvato')+' e verificato su Supabase alle '+new Date().toLocaleTimeString('it-IT',{hour:'2-digit',minute:'2-digit'}));
         if(altreModifiche)programmaSalvataggioAutomaticoAppalto();
@@ -2696,7 +2717,7 @@ async function salvaAutomaticamenteSettimanaAppalto(){
   aggiornaStatoAutosaveAppalto('Salvataggio automatico in corso…');
   await salvaSettimanaSupabase('salvataggio automatico');
 }
-window.addEventListener('beforeunload',()=>{if(APPALTO_LUNEDI&&APPALTO_BOZZE_META[APPALTO_LUNEDI]?.pending)localStorage.setItem(APPALTO_STORAGE_KEY,JSON.stringify(APPALTO_SETTIMANE));});
+window.addEventListener('beforeunload',event=>{if(APPALTO_LUNEDI&&APPALTO_BOZZE_META[APPALTO_LUNEDI]?.pending&&!scriviLocaleAppalto(APPALTO_STORAGE_KEY,JSON.stringify(APPALTO_SETTIMANE))){event.preventDefault();event.returnValue='';}});
 
 aggiornaStatoAutosaveAppalto(APPALTO_UNDO.length?'Bozza locale pronta':'Nessuna modifica da salvare');
 
