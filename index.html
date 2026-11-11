@@ -1,5 +1,5 @@
 <!DOCTYPE html>
-<!-- build-pages: planner-loading-fix-20261111 -->
+<!-- build-pages: week-copy-guard-save-cleanup-20261111 -->
 <html lang="it">
 <head>
 <meta charset="UTF-8">
@@ -837,6 +837,7 @@ let APPALTO_UNDO=caricaUndoAppalto();
 let APPALTO_VERSIONI_REMOTE=new Map();
 let APPALTO_AUTOSAVE_TIMER=null;
 let APPALTO_SALVATAGGIO_IN_CORSO=false;
+const APPALTO_CREAZIONI_IN_CORSO=new Set();
 let APPALTO_SALVATAGGIO_STATO='Nessuna modifica da salvare';
 let APPALTO_MAPPING=caricaMappatureAppalto();
 let APPALTO_LUNEDI='';
@@ -887,6 +888,26 @@ function annullaUltimaModificaAppalto(){
 }
 function caricaMappatureAppalto(){try{const m=JSON.parse(localStorage.getItem(APPALTO_MAPPING_KEY)||'{}');return{reparti:m.reparti||{},attivita:m.attivita||{}};}catch(_){return{reparti:{},attivita:{}};}}
 function salvaMappatureAppalto(){localStorage.setItem(APPALTO_MAPPING_KEY,JSON.stringify(APPALTO_MAPPING));}
+// Letture ordinate e complete, anche quando il limite Data API è inferiore alla pagina richiesta.
+async function leggiTurniCassanoCompleti(lunedi=null,colonne='*'){
+  const righe=[],visti=new Set();let totale=null;
+  try{
+    while(true){
+      let query=sb.from('TurniCassanoPianificati').select(colonne,{count:'exact'}).order('UID');
+      if(lunedi)query=query.eq('Settimana',lunedi);
+      const{data,error,count}=await query.range(righe.length,righe.length+499);
+      if(error)return{data:null,error};
+      if(!Number.isInteger(count)||count<0||totale!==null&&totale!==count)return{data:null,error:{message:'I turni sono cambiati durante la lettura. Riprova.'}};
+      totale=count;
+      for(const r of data||[]){
+        if(!r.UID||visti.has(r.UID))return{data:null,error:{message:'Lettura dei turni incompleta: identificativi ripetuti.'}};
+        visti.add(r.UID);righe.push(r);
+      }
+      if(righe.length===totale)return{data:righe,error:null};
+      if(!data?.length||righe.length>totale)return{data:null,error:{message:'Lettura dei turni incompleta. Riprova.'}};
+    }
+  }catch(error){return{data:null,error};}
+}
 async function caricaStatoCassanoSupabase(){
   if(!SESSIONE_CASSANO||!projectIdValido())return;
   statoSync('Caricamento da Supabase…');
@@ -894,7 +915,7 @@ async function caricaStatoCassanoSupabase(){
     sb.from('ConfigurazioneCassano').select('*').eq('ID_Magazzino',ID_MAGAZZINO_CASSANO).maybeSingle(),
     sb.from('MappatureCassano').select('*'),
     sb.from('SettimaneCassano').select('*').eq('ID_Magazzino',ID_MAGAZZINO_CASSANO),
-    sb.from('TurniCassanoPianificati').select('*'),
+    leggiTurniCassanoCompleti(),
     sb.from('CatalogoProgrammazioneCassano').select('*').eq('ID_Magazzino',ID_MAGAZZINO_CASSANO),
     sb.from('RepartiPrincipaliCassano').select('*').eq('ID_Magazzino',ID_MAGAZZINO_CASSANO)
   ]);
@@ -938,39 +959,49 @@ function turnoConRepartoAttivitaValido(r){
 function rigaPianificataDaSupabase(t){
   return {uid:t.UID,giorno:Number(t.GiornoIndice),nome:t.NomeOrigine||'',id_dipendente:t.ID_Dipendente,reparto:t.RepartoOrigine||'',id_reparto:t.ID_Reparto,attivita:t.AttivitaOrigine||'',id_attivita:t.ID_Attivita,id_catalogo_programmazione:t.ID_CatalogoProgrammazione||null,origine_nome:t.NomeOrigine||'',origine_reparto:t.RepartoOrigine||'',origine_attivita:t.AttivitaOrigine||'',inizio:t.OraInizio?String(t.OraInizio).slice(0,5):'',fine:t.OraFine?String(t.OraFine).slice(0,5):'',tipo:t.Tipo||'standard',sostituisce:t.UIDSostituito||undefined,note:t.Note||''};
 }
-async function salvaSettimanaSupabaseBase(motivoStorico='salvataggio settimana'){
-  const settimana=APPALTO_SETTIMANE[APPALTO_LUNEDI];if(!settimana){toast('Prima crea la settimana.','warn');return false;}
+async function salvaSettimanaSupabaseBase(motivoStorico='salvataggio settimana',lunedi=APPALTO_LUNEDI){
+  const locale=APPALTO_SETTIMANE[lunedi];if(!locale){toast('Prima crea la settimana.','warn');return false;}
+  const settimana=structuredClone(locale);
   if(!SESSIONE_CASSANO||!projectIdValido()){toast('Sessione Supabase non valida.','err');return false;}
   normalizzaRighePlanner(settimana);
   const incompatibili=(settimana.righe||[]).filter(r=>!turnoConRepartoAttivitaValido(r));
   if(incompatibili.length){statoSync('Salvataggio bloccato');toast(`Salvataggio bloccato: ${incompatibili.length} fasce hanno un'attività non compatibile con il reparto. Correggile prima di salvare.`,'err');return false;}
   statoSync('Salvataggio settimana…');
   const ora=new Date().toISOString(),utente=SESSIONE_CASSANO.user.id,origine=(settimana.origine||'').match(/\d{4}-\d{2}-\d{2}/)?.[0]||null;
-  let avvisoStorico='';
   const[{data:testataPrecedente,error:eStoricoTestata},{data:righePrecedenti,error:eStoricoRighe}]=await Promise.all([
-    sb.from('SettimaneCassano').select('*').eq('Lunedi',APPALTO_LUNEDI).maybeSingle(),
-    sb.from('TurniCassanoPianificati').select('*').eq('Settimana',APPALTO_LUNEDI)
+    sb.from('SettimaneCassano').select('*').eq('Lunedi',lunedi).maybeSingle(),
+    leggiTurniCassanoCompleti(lunedi)
   ]);
-  if(eStoricoTestata||eStoricoRighe)avvisoStorico=' Copia nello storico non creata.';
+  if(eStoricoTestata||eStoricoRighe){statoSync('Salvataggio interrotto');toast('Impossibile leggere la settimana completa prima del salvataggio. Bozza mantenuta: '+(eStoricoTestata||eStoricoRighe).message,'err');return false;}
   else if(testataPrecedente||(righePrecedenti||[]).length){
     const{error:eStorico}=await sb.from('StoricoSettimaneCassano').insert({
-      Settimana:APPALTO_LUNEDI,
+      Settimana:lunedi,
       Motivo:motivoStorico,
       NumeroRighe:(righePrecedenti||[]).length,
       Dati:{testata:testataPrecedente||null,righe:righePrecedenti||[]}
     });
-    if(eStorico)avvisoStorico=' Copia nello storico non creata.';
+    if(eStorico){statoSync('Salvataggio interrotto');toast('Copia di sicurezza nello storico non creata. Bozza mantenuta: '+eStorico.message,'err');return false;}
   }
   statoSync('Salvataggio settimana…');
-  const{error:e1}=await sb.from('SettimaneCassano').upsert({Lunedi:APPALTO_LUNEDI,ID_Magazzino:ID_MAGAZZINO_CASSANO,Stato:settimana.stato||'bozza',OrigineLunedi:origine,AggiornatoIl:ora,AggiornatoDa:utente},{onConflict:'Lunedi'});
+  const{error:e1}=await sb.from('SettimaneCassano').upsert({Lunedi:lunedi,ID_Magazzino:ID_MAGAZZINO_CASSANO,Stato:settimana.stato||'bozza',OrigineLunedi:origine,AggiornatoIl:ora,AggiornatoDa:utente},{onConflict:'Lunedi'});
   if(e1){statoSync('Errore di salvataggio');toast('Settimana non salvata: '+e1.message,'err');return false;}
-  const righe=(settimana.righe||[]).map(r=>({UID:r.uid,Settimana:APPALTO_LUNEDI,GiornoIndice:Number(r.giorno),ID_Dipendente:r.id_dipendente?Number(r.id_dipendente):null,NomeOrigine:r.origine_nome||r.nome||null,ID_Reparto:r.id_reparto?Number(r.id_reparto):null,RepartoOrigine:r.origine_reparto||r.reparto||null,ID_Attivita:r.id_attivita?Number(r.id_attivita):null,ID_CatalogoProgrammazione:r.id_catalogo_programmazione||null,AttivitaOrigine:r.origine_attivita||r.attivita||null,OraInizio:r.inizio||null,OraFine:r.fine||null,Tipo:r.tipo||'standard',UIDSostituito:r.sostituisce||null,Note:r.note||null,AggiornatoIl:ora,AggiornatoDa:utente}));
+  const righe=(settimana.righe||[]).map(r=>({UID:r.uid,Settimana:lunedi,GiornoIndice:Number(r.giorno),ID_Dipendente:r.id_dipendente?Number(r.id_dipendente):null,NomeOrigine:r.origine_nome||r.nome||null,ID_Reparto:r.id_reparto?Number(r.id_reparto):null,RepartoOrigine:r.origine_reparto||r.reparto||null,ID_Attivita:r.id_attivita?Number(r.id_attivita):null,ID_CatalogoProgrammazione:r.id_catalogo_programmazione||null,AttivitaOrigine:r.origine_attivita||r.attivita||null,OraInizio:r.inizio||null,OraFine:r.fine||null,Tipo:r.tipo||'standard',UIDSostituito:r.sostituisce||null,Note:r.note||null,AggiornatoIl:ora,AggiornatoDa:utente}));
   if(righe.length){const{error}=await sb.from('TurniCassanoPianificati').upsert(righe,{onConflict:'UID'});if(error){statoSync('Salvataggio parziale');toast('Testata salvata, ma turni non salvati: '+error.message,'err');return false;}}
-  const{data:esistenti,error:e2}=await sb.from('TurniCassanoPianificati').select('UID').eq('Settimana',APPALTO_LUNEDI);
+  const{data:esistenti,error:e2}=await leggiTurniCassanoCompleti(lunedi,'UID');
   if(e2){statoSync('Verifica incompleta');toast('Settimana salvata, verifica righe fallita: '+e2.message,'warn');return false;}
   const attuali=new Set(righe.map(r=>r.UID)),daEliminare=(esistenti||[]).map(x=>x.UID).filter(x=>!attuali.has(x));
-  if(daEliminare.length){const{error}=await sb.from('TurniCassanoPianificati').delete().in('UID',daEliminare);if(error){statoSync('Pulizia incompleta');toast('Turni salvati, ma alcune righe eliminate sono rimaste: '+error.message,'warn');return false;}}
-  statoSync('Salvata '+APPALTO_LUNEDI);toast('Settimana salvata su Supabase.'+avvisoStorico,avvisoStorico?'warn':undefined);return true;
+  const presenti=new Set((esistenti||[]).map(r=>r.UID));
+  if(attuali.size!==righe.length||righe.some(r=>!presenti.has(r.UID))){statoSync('Verifica incompleta');toast('Turni non completamente archiviati. Nessuna vecchia riga eliminata; bozza mantenuta.','err');return false;}
+  // Un elenco di migliaia di UID in una sola URL può essere rifiutato prima di raggiungere Supabase.
+  for(let i=0;i<daEliminare.length;i+=50){
+    const{error}=await sb.from('TurniCassanoPianificati').delete().eq('Settimana',lunedi).in('UID',daEliminare.slice(i,i+50));
+    if(error){statoSync('Pulizia incompleta');toast('Turni salvati, ma la rimozione delle vecchie righe non è terminata. Bozza mantenuta: riprova Salva settimana. '+error.message,'warn');return false;}
+  }
+  const{data:verificate,error:eVerifica}=await leggiTurniCassanoCompleti(lunedi,'UID');
+  if(eVerifica||verificate.length!==attuali.size||verificate.some(r=>!attuali.has(r.UID))){
+    statoSync('Verifica incompleta');toast('Salvataggio non confermato: le righe in archivio non corrispondono alla bozza. Bozza mantenuta; riprova Salva settimana.'+(eVerifica?' '+eVerifica.message:''),'warn');return false;
+  }
+  statoSync('Salvata '+lunedi);toast('Settimana salvata e verificata su Supabase.');return true;
 }
 function chiudiStoricoSettimana(){const overlay=document.getElementById('storico-settimana-overlay');if(overlay)overlay.style.display='none';}
 async function apriStoricoSettimana(){
@@ -1862,13 +1893,28 @@ function renderCorpoAppalto(){
   body.innerHTML=`<div class="stats"><div class="stat"><div class="n">${filtriAttivi||APPALTO_REPARTO!=='Tutti'?righe.length:DIPENDENTI.length}</div><div class="l">${filtriAttivi||APPALTO_REPARTO!=='Tutti'?'Righe mostrate':'Personale Cassano'}</div></div><div class="stat ${nonProgrammatiVisibili?'warn':''}"><div class="n">${nonProgrammatiVisibili}</div><div class="l">Da programmare</div></div><div class="stat"><div class="n">${riposi}</div><div class="l">Riposi</div></div><div class="stat ${assenti.length?'err':''}"><div class="n">${assenti.length}</div><div class="l">Assenti / ferie</div></div><div class="stat ${conflitti?'err':''}"><div class="n">${conflitti}</div><div class="l">Fasce sovrapposte</div></div><div class="stat ${nonCollegati?'warn':''}"><div class="n">${nonCollegati}</div><div class="l">Dati da collegare</div></div></div><div class="tw"><table class="tabella-programmazione"><colgroup><col style="width:9%"><col style="width:25%"><col style="width:9%"><col style="width:14%"><col style="width:24%"><col style="width:8%"><col style="width:11%"></colgroup><thead><tr><th>Stato</th><th>Persona</th><th>Orario</th><th>Reparto</th><th>Attività</th><th>Ore</th><th>Azioni</th></tr></thead><tbody>${html||'<tr><td colspan="7" class="empty">Nessun turno nel filtro selezionato.</td></tr>'}</tbody></table></div>`;
   aggiornaComandiReplica();
 }
-function creaDaSettimanaPrecedente(){
-  const precedente=addGiorni(APPALTO_LUNEDI,-7);let base=APPALTO_SETTIMANE[precedente];
+async function creaDaSettimanaPrecedente(){
+  const lunedi=APPALTO_LUNEDI;
+  if(!lunedi){toast('Seleziona prima la settimana.','warn');return;}
+  if(APPALTO_SETTIMANE[lunedi]){toast('Settimana già creata.','warn');return;}
+  if(APPALTO_CREAZIONI_IN_CORSO.has(lunedi)){toast('Creazione della settimana già in corso.','warn');return;}
+  if(!SESSIONE_CASSANO||!projectIdValido()){toast('Sessione Supabase non valida.','err');return;}
+  APPALTO_CREAZIONI_IN_CORSO.add(lunedi);
+  try{
+  const[{data:testata,error:eTestata},{data:presenti,error:eTurni}]=await Promise.all([
+    sb.from('SettimaneCassano').select('Lunedi').eq('Lunedi',lunedi).maybeSingle(),
+    sb.from('TurniCassanoPianificati').select('UID').eq('Settimana',lunedi).limit(1)
+  ]);
+  if(eTestata||eTurni){toast('Impossibile verificare se la settimana esiste. Creazione annullata: '+(eTestata||eTurni).message,'err');return;}
+  if(testata||presenti?.length||APPALTO_SETTIMANE[lunedi]){toast('Settimana già creata.','warn');return;}
+  if(APPALTO_LUNEDI!==lunedi){toast('Settimana selezionata cambiata: creazione annullata.','warn');return;}
+  const precedente=addGiorni(lunedi,-7);let base=APPALTO_SETTIMANE[precedente];
   if(!base&&precedente==='2026-09-14'){importaPdfComeSettimana(precedente);base=APPALTO_SETTIMANE[precedente];}
   if(!base){toast('La settimana precedente non è disponibile localmente.','warn');return;}
-  if(APPALTO_SETTIMANE[APPALTO_LUNEDI]&&!confirm('Sostituire la bozza locale già presente per questa settimana?'))return;
   let seq=0;const righe=base.righe.filter(r=>r.tipo!=='sostituzione').map(r=>({...structuredClone(r),uid:(r.tipo==='riposo'?'riposo-':'std-')+Date.now()+'-'+seq++,tipo:r.tipo==='riposo'?'riposo':'standard',sostituisce:undefined}));
-  APPALTO_SETTIMANE[APPALTO_LUNEDI]={stato:'bozza',origine:'Settimana precedente '+precedente,righe};salvaSettimaneAppalto();caricaSettimanaAppalto(APPALTO_LUNEDI);APPALTO_MSG='Settimana creata dalla precedente; le sostituzioni temporanee non sono state copiate.';renderCorpoAppalto();controllaAssenzeAppalto();
+  APPALTO_SETTIMANE[lunedi]={stato:'bozza',origine:'Settimana precedente '+precedente,righe};salvaSettimaneAppalto();caricaSettimanaAppalto(lunedi);APPALTO_MSG='Settimana creata dalla precedente; le sostituzioni temporanee non sono state copiate.';renderCorpoAppalto();await controllaAssenzeAppalto();
+  }catch(error){toast('Creazione non completata: '+(error?.message||error)+'. Eventuali modifiche locali sono mantenute.','err');}
+  finally{APPALTO_CREAZIONI_IN_CORSO.delete(lunedi);}
 }
 async function controllaAssenzeAppalto(silenzioso=false){
   const lunediCaricato=APPALTO_LUNEDI;
@@ -2604,12 +2650,22 @@ async function salvaSettimanaSupabase(motivoStorico='salvataggio settimana'){
   const automatico=motivoStorico==='salvataggio automatico';
   aggiornaStatoAutosaveAppalto(automatico?'Salvataggio automatico in corso…':'Salvataggio in corso…');
   try{
-    const ok=await salvaSettimanaSupabaseBase(motivoStorico);
+    const lunedi=APPALTO_LUNEDI,contenutoInviato=JSON.stringify(APPALTO_SETTIMANE[lunedi]);
+    const ok=await salvaSettimanaSupabaseBase(motivoStorico,lunedi);
     if(ok){
-      if(APPALTO_BOZZE_META[APPALTO_LUNEDI]){APPALTO_BOZZE_META[APPALTO_LUNEDI].pending=false;APPALTO_BOZZE_META[APPALTO_LUNEDI].salvatoIl=new Date().toISOString();localStorage.setItem(APPALTO_BOZZE_META_KEY,JSON.stringify(APPALTO_BOZZE_META));}
-      aggiornaStatoAutosaveAppalto((automatico?'Salvato automaticamente':'Salvato')+' su Supabase alle '+new Date().toLocaleTimeString('it-IT',{hour:'2-digit',minute:'2-digit'}));
+      const altreModifiche=JSON.stringify(APPALTO_SETTIMANE[lunedi])!==contenutoInviato;
+      if(APPALTO_BOZZE_META[lunedi]){APPALTO_BOZZE_META[lunedi].pending=altreModifiche;APPALTO_BOZZE_META[lunedi].salvatoIl=new Date().toISOString();localStorage.setItem(APPALTO_BOZZE_META_KEY,JSON.stringify(APPALTO_BOZZE_META));}
+      if(APPALTO_LUNEDI===lunedi){
+        aggiornaStatoAutosaveAppalto(altreModifiche?'Modifiche più recenti in bozza · in attesa di salvataggio':(automatico?'Salvato automaticamente':'Salvato')+' e verificato su Supabase alle '+new Date().toLocaleTimeString('it-IT',{hour:'2-digit',minute:'2-digit'}));
+        if(altreModifiche)programmaSalvataggioAutomaticoAppalto();
+      }
+    }else{
+      aggiornaStatoAutosaveAppalto('Salvataggio non completato · bozza locale mantenuta');
     }
     return ok;
+  }catch(error){
+    aggiornaStatoAutosaveAppalto('Salvataggio non completato · bozza locale mantenuta');
+    toast('Salvataggio interrotto. Bozza mantenuta: riprova Salva settimana. '+(error?.message||error),'err');return false;
   }finally{APPALTO_SALVATAGGIO_IN_CORSO=false;}
 }
 async function salvaAutomaticamenteSettimanaAppalto(){
@@ -2625,4 +2681,3 @@ avviaApp();
 </script>
 </body>
 </html>
-
