@@ -1,5 +1,5 @@
 <!DOCTYPE html>
-<!-- build-pages: readable-pdf-preview-20261111 -->
+<!-- build-pages: planner-loading-fix-20261111 -->
 <html lang="it">
 <head>
 <meta charset="UTF-8">
@@ -557,7 +557,10 @@ async function caricaCatalogoAttivita(){
   if(!ID_ATTIVITA_NAVETTA)console.warn('Attività "Navetta" non trovata nel catalogo Ortofrutta di Nexus: il budget Navetta non potrà mostrare le ore piazzate.');
 }
 
+let CASSANO_TAB_ATTIVA='';
+let CASSANO_TAB_VERSIONE=0;
 function showTab(id){
+  CASSANO_TAB_ATTIVA=id;CASSANO_TAB_VERSIONE++;
   document.body.classList.toggle('vista-programmazione-attiva',id==='appalto');
   document.querySelectorAll('nav button').forEach(b=>b.classList.remove('on'));
   document.getElementById('nav-'+id).classList.add('on');
@@ -589,8 +592,10 @@ function fmtDataIt(dataStr){
 <!-- Le funzioni delle singole schermate (renderConfigTab, renderPrevisioneTab, renderProgrammazioneTab, renderControlloTab) vengono aggiunte di seguito -->
 <script>
 async function renderConfigTab(){
+  const versioneTab=CASSANO_TAB_VERSIONE;
   document.getElementById('mc').innerHTML='<div class="loading">⏳ Caricamento...</div>';
   const{data:obiettivi,error:e1}=await sb.from('ObiettiviAttivitaOrtofrutta').select('*');
+  if(CASSANO_TAB_ATTIVA!=='config'||versioneTab!==CASSANO_TAB_VERSIONE)return;
   if(e1){document.getElementById('mc').innerHTML=`<div class="alert aerr">Errore: ${e1.message}. Controlla la configurazione Supabase.</div>`;return;}
   const obMap={};
   (obiettivi||[]).forEach(o=>{obMap[o.ID_Attivita]=o;});
@@ -598,6 +603,7 @@ async function renderConfigTab(){
   const valVent=obMap[ID_ATTIVITA_VENTILAZIONE]?obMap[ID_ATTIVITA_VENTILAZIONE].ObiettivoColliOra:'';
 
   const{data:parametri}=await sb.from('ParametriOrtofrutta').select('*').eq('ID',1).maybeSingle();
+  if(CASSANO_TAB_ATTIVA!=='config'||versioneTab!==CASSANO_TAB_VERSIONE)return;
   const pctLegaggio=parametri?.PercentualeLegaggio??'';
   const pctNavetta=parametri?.PercentualeNavetta??'';
 
@@ -667,9 +673,12 @@ function renderPrevisioneTab(){
 }
 
 async function caricaPrevisioneSettimana(){
-  const lun=document.getElementById('prev-lun').value;
+  const input=document.getElementById('prev-lun'),corpo=document.getElementById('prev-body');
+  if(!input||!corpo)return;
+  const versioneTab=CASSANO_TAB_VERSIONE,lun=input.value;
   const giorni=[...Array(7)].map((_,i)=>addGiorni(lun,i));
   const{data,error}=await sb.from('PrevisioneColliOrtofrutta').select('*').in('Data',giorni);
+  if(versioneTab!==CASSANO_TAB_VERSIONE||document.getElementById('prev-body')!==corpo||input.value!==lun)return;
   const map={};
   (data||[]).forEach(r=>{map[r.Data]={of:r.ColliPrevisti,gro:r.ColliPrevistiGrocery};});
   const righe=giorni.map((g,i)=>`
@@ -717,7 +726,9 @@ async function renderControlloTab(){
 }
 
 async function caricaControlloSettimana(){
-  const lun=document.getElementById('ctrl-lun').value;
+  const input=document.getElementById('ctrl-lun'),corpo=document.getElementById('ctrl-body');
+  if(!input||!corpo)return;
+  const versioneTab=CASSANO_TAB_VERSIONE,lun=input.value;
   const giorni=[...Array(7)].map((_,i)=>addGiorni(lun,i));
 
   const{data:obiettivi}=await sb.from('ObiettiviAttivitaOrtofrutta').select('*');
@@ -733,6 +744,7 @@ async function caricaControlloSettimana(){
   const orePianMap={};
   (turni||[]).forEach(t=>{orePianMap[t.Data]=(orePianMap[t.Data]||0)+(Number(t.OreTurno)||0);});
 
+  if(versioneTab!==CASSANO_TAB_VERSIONE||document.getElementById('ctrl-body')!==corpo||input.value!==lun)return;
   const righe=giorni.map((g,i)=>{
     const colliReali=realiMap[g];
     let oreNecessarie=null, delta=null;
@@ -1033,7 +1045,7 @@ function lunediProssimaSettimana(ora=new Date()){
   return addGiorni(lunediSettimana(oggi),7);
 }
 function renderProgrammazioneAppaltoTab(){
-  APPALTO_LUNEDI=lunediProssimaSettimana();
+  APPALTO_LUNEDI=APPALTO_LUNEDI||lunediProssimaSettimana();
   if(!APPALTO_SETTIMANE[APPALTO_LUNEDI]&&APPALTO_LUNEDI==='2026-09-14')importaPdfComeSettimana(APPALTO_LUNEDI);
   document.getElementById('mc').innerHTML=`<div class="card"><div class="ct">Programmazione dell'intero appalto</div>
     <div class="alert aok">Programmatore unico collegato a Supabase: ogni fascia appartiene alla persona, anche quando nella stessa giornata cambia reparto o attività. Ogni modifica viene salvata subito in bozza sul computer e poi automaticamente su Supabase dopo pochi secondi. Il salvataggio automatico aggiorna Supabase dopo pochi secondi; il pulsante “Salva settimana” salva immediatamente.</div>
@@ -1047,16 +1059,22 @@ function caricaSettimanaAppalto(lunedi){
   APPALTO_OF_DATA={previsioni:{},obiettivi:{},percLegaggio:0,percNavetta:0,caricato:false};
   const dataInput=document.getElementById('appalto-lun');if(dataInput)dataInput.value=APPALTO_LUNEDI;
   const settimana=APPALTO_SETTIMANE[APPALTO_LUNEDI];
-  normalizzaRighePlanner(settimana);if(settimana)salvaSettimaneAppalto({silenzioso:true});
+  // Aprire una settimana non deve scrivere nel browser: una memoria piena non può bloccare la griglia.
+  normalizzaRighePlanner(settimana);
   const reparti=['Tutti',...new Set([...REPARTI.map(nomeReparto),...(settimana?.righe||[]).map(r=>r.reparto)].filter(Boolean))];
   if(!reparti.includes(APPALTO_REPARTO))APPALTO_REPARTO='Tutti';
   const sel=document.getElementById('appalto-rep');if(sel)sel.innerHTML=reparti.map(r=>`<option ${r===APPALTO_REPARTO?'selected':''}>${r}</option>`).join('');
+  aggiornaStatoAutosaveAppalto(APPALTO_BOZZE_META[APPALTO_LUNEDI]?.pending?'Modifiche locali da salvare':settimana?'Settimana caricata':'Nessuna settimana caricata');
   renderTabsAppalto();
   if(APPALTO_BOZZE_META[APPALTO_LUNEDI]?.pending)programmaSalvataggioAutomaticoAppalto();
-  caricaDatiOrtofruttaAppalto().then(()=>renderCorpoAppalto());
-  if(settimana)controllaAssenzeAppalto(true);
+  const lunediCaricato=APPALTO_LUNEDI;
+  caricaDatiOrtofruttaAppalto().then(()=>{
+    if(CASSANO_TAB_ATTIVA==='appalto'&&APPALTO_LUNEDI===lunediCaricato)renderCorpoAppalto();
+  }).catch(error=>{console.error('Caricamento copertura Ortofrutta',error);});
+  if(settimana)controllaAssenzeAppalto(true).catch(error=>{console.error('Caricamento assenze',error);});
 }
 async function caricaDatiOrtofruttaAppalto(){
+  const lunediCaricato=APPALTO_LUNEDI;
   if(!SB_URL.includes('eqtyfnluswalfassmlxd')){APPALTO_MSG='Errore: project ID Supabase non valido.';return;}
   const date=[...Array(8)].map((_,i)=>addGiorni(APPALTO_LUNEDI,i));
   const [ob,prev,param]=await Promise.all([
@@ -1064,6 +1082,7 @@ async function caricaDatiOrtofruttaAppalto(){
     sb.from('PrevisioneColliOrtofrutta').select('*').in('Data',date),
     sb.from('ParametriOrtofrutta').select('*').eq('ID',1).maybeSingle()
   ]);
+  if(APPALTO_LUNEDI!==lunediCaricato)return;
   const errore=ob.error||prev.error||param.error;if(errore){APPALTO_OF_DATA={previsioni:{},obiettivi:{},percLegaggio:0,percNavetta:0,caricato:false};return;}
   const obiettivi={};(ob.data||[]).forEach(o=>obiettivi[o.ID_Attivita]=Number(o.ObiettivoColliOra)||0);
   const previsioni={};(prev.data||[]).forEach(p=>previsioni[p.Data]=Number(p.ColliPrevisti)||0);
@@ -1852,11 +1871,13 @@ function creaDaSettimanaPrecedente(){
   APPALTO_SETTIMANE[APPALTO_LUNEDI]={stato:'bozza',origine:'Settimana precedente '+precedente,righe};salvaSettimaneAppalto();caricaSettimanaAppalto(APPALTO_LUNEDI);APPALTO_MSG='Settimana creata dalla precedente; le sostituzioni temporanee non sono state copiate.';renderCorpoAppalto();controllaAssenzeAppalto();
 }
 async function controllaAssenzeAppalto(silenzioso=false){
+  const lunediCaricato=APPALTO_LUNEDI;
   if(!SB_URL.includes('eqtyfnluswalfassmlxd')){APPALTO_MSG='Errore: project ID Supabase non valido.';renderCorpoAppalto();return;}
   const settimana=APPALTO_SETTIMANE[APPALTO_LUNEDI];if(!settimana){toast('Prima crea la settimana.','warn');return;}
   const ids=[...new Set(DIPENDENTI.map(r=>r.ID_Dipendente).filter(Boolean))];if(!ids.length){APPALTO_MSG='Nessun dipendente attivo associato al magazzino di Cassano.';renderCorpoAppalto();return;}
   const date=[...Array(8)].map((_,i)=>addGiorni(APPALTO_LUNEDI,i));
   const{data,error}=await sb.from('Assenze').select('*').in('ID_Dipendente',ids).in('Data',date);
+  if(APPALTO_LUNEDI!==lunediCaricato)return;
   if(error){APPALTO_MSG='Errore nel controllo assenze: '+error.message;renderCorpoAppalto();return;}
   APPALTO_ASSENZE=new Map((data||[]).map(a=>[chiaveAssenza(a.ID_Dipendente,a.Data),a]));APPALTO_ASSENZE_VERIFICATE=true;if(!silenzioso)APPALTO_MSG='Controllo completato in sola lettura su tutto il personale Cassano: '+(data||[]).length+' assenze/ferie trovate nelle date interessate.';renderCorpoAppalto();
 }
