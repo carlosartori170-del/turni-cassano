@@ -1,5 +1,5 @@
 <!DOCTYPE html>
-<!-- build-pages: pdf-ortofrutta-verticale-fascia-unica-20261111 -->
+<!-- build-pages: pdf-ortofrutta-separatori-persone-20261111 -->
 <html lang="it">
 <head>
 <meta charset="UTF-8">
@@ -2722,6 +2722,14 @@ function creaDocumentoPdfTurni(dati){
         const cella=dati.righe[data.row.index].giorni[data.column.index-1];
         if(!cella.assenza&&!cella.riposo&&cella.turni.length){
           disegnaTurniColoratiPdf(doc,data.cell,cella,dati.categoria,fontSize);
+        }
+        if(dati.categoria==='ortofrutta'&&data.column.index===7){
+          // Una linea continua distingue le persone; le fasce interne restano sottili.
+          doc.saveGraphicsState();
+          doc.setDrawColor(85,95,88);doc.setLineWidth(.4);
+          doc.line(margine,data.cell.y,margine+area,data.cell.y);
+          doc.line(margine,data.cell.y+data.cell.height,margine+area,data.cell.y+data.cell.height);
+          doc.restoreGraphicsState();
         }
       },
       pageBreak:'auto',rowPageBreak:'avoid'
