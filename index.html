@@ -1,5 +1,5 @@
 <!DOCTYPE html>
-<!-- build-pages: pdf-format-fix-20261106-2 -->
+<!-- build-pages: readable-pdf-preview-20261111 -->
 <html lang="it">
 <head>
 <meta charset="UTF-8">
@@ -2366,21 +2366,32 @@ function legendaColoriDettaglioPdf(dati){
   return'';
 }
 function testoMansioneTurnoPdf(turno){if(categoriaDirettaPdfTurno(turno)==='forno')return'Lavaggio forno';const reparto=testoPulitoStampa(turno?.reparto),attivita=testoPulitoStampa(turno?.attivita);if(/economia/i.test(reparto))return attivita||'Attività';return reparto+(attivita?' - '+attivita:'');}
-function disegnaTurniColoratiPdf(doc,cellaPdf,cellaDati,categoria,fontBase=7){
+function formatoPdfTurni(categoria){
+  return ['forno','lavaggio','ricevimento'].includes(categoria)?'a4':'a3';
+}
+function misureFasciaPdf(doc,turno,larghezza,fontBase){
+  const fontOra=fontBase,fontTesto=fontBase*.92,padding=1.25;
+  doc.setFont('helvetica','normal');doc.setFontSize(fontTesto);
+  const righe=doc.splitTextToSize(testoMansioneTurnoPdf(turno),larghezza-padding*2);
+  const passoOra=fontOra*.352778*1.15,passoTesto=fontTesto*.352778*1.15;
+  return{fontOra,fontTesto,padding,righe,passoOra,passoTesto,altezza:padding*2+passoOra+righe.length*passoTesto};
+}
+function disegnaTurniColoratiPdf(doc,cellaPdf,cellaDati,categoria,fontBase=9){
   const turni=cellaDati.turni||[];if(!turni.length)return;
-  const x=cellaPdf.x,y=cellaPdf.y,w=cellaPdf.width,h=cellaPdf.height,altezza=h/turni.length;
+  const x=cellaPdf.x,w=cellaPdf.width;
+  let y=cellaPdf.y;
   turni.forEach((turno,i)=>{
+    const m=misureFasciaPdf(doc,turno,w,fontBase);
     const stile=stileColoreTurnoPdf(turno,categoria)||{rgb:colorePdfReparto(turno.reparto),textRgb:[19,19,19]};
-    const y0=y+i*altezza,hh=i===turni.length-1?y+h-y0:altezza;
-    doc.setFillColor(...stile.rgb);doc.rect(x+.12,y0+.12,w-.24,Math.max(0,hh-.24),'F');
-    if(i){doc.setDrawColor(174,180,174);doc.setLineWidth(.12);doc.line(x,y0,x+w,y0);}
-    const grandezzaOra=Math.max(4,Math.min(7.6,fontBase)),grandezzaTesto=Math.max(3.6,grandezzaOra*.86);
-    const yOra=y0+Math.min(hh*.42,1.15+grandezzaOra*.38),yTesto=y0+Math.min(hh*.72,1.45+grandezzaOra*.75);
-    doc.setTextColor(...(stile.textRgb||[19,19,19]));doc.setFont('helvetica','bold');doc.setFontSize(grandezzaOra);
-    doc.text(turno.inizio+'–'+turno.fine,x+1.1,yOra,{maxWidth:w-2.2});
-    doc.setFont('helvetica','normal');doc.setFontSize(grandezzaTesto);
-    const mansione=testoMansioneTurnoPdf(turno),righe=doc.splitTextToSize(mansione,w-2.2).slice(0,2);
-    doc.text(righe,x+1.1,yTesto,{lineHeightFactor:1.0});
+    const altezza=i===turni.length-1?Math.max(m.altezza,cellaPdf.y+cellaPdf.height-y):m.altezza;
+    doc.setFillColor(...stile.rgb);doc.rect(x+.12,y+.12,w-.24,Math.max(0,altezza-.24),'F');
+    if(i){doc.setDrawColor(174,180,174);doc.setLineWidth(.12);doc.line(x,y,x+w,y);}
+    doc.setTextColor(...(stile.textRgb||[19,19,19]));
+    doc.setFont('helvetica','bold');doc.setFontSize(m.fontOra);
+    doc.text(turno.inizio+'-'+turno.fine,x+m.padding,y+m.padding+m.passoOra*.8);
+    doc.setFont('helvetica','normal');doc.setFontSize(m.fontTesto);
+    doc.text(m.righe,x+m.padding,y+m.padding+m.passoOra+m.passoTesto*.8,{lineHeightFactor:1.15});
+    y+=altezza;
   });
 }
 function testoCellaStampa(cella){
@@ -2397,33 +2408,43 @@ function htmlCellaStampa(cella,categoria='totale'){
 function apriAnteprimaTurniAppalto(categoria='totale'){
   const dati=categoria==='totale'?datiStampaTurniAppalto():datiStampaReparto(categoria);if(!dati){toast('Prima crea o carica una settimana.','warn');return;}
   if(!dati.righe.length){toast('Non ci sono turni per questo reparto nella settimana selezionata.','warn');return;}
-  document.getElementById('stampa-turni-overlay')?.remove();
+  chiudiAnteprimaTurniAppalto();
   const intestazioni=dati.giorni.map(g=>'<th>'+escapeHtmlStampa(g.etichetta.slice(0,3))+'<br>'+fmtDataIt(g.data)+'</th>').join('');
   const righe=dati.righe.map(p=>'<tr><td>'+escapeHtmlStampa(p.nome)+'</td>'+p.giorni.map(c=>htmlCellaStampa(c,dati.categoria)).join('')+'</tr>').join('');
   const verifica=APPALTO_ASSENZE_VERIFICATE?'Assenze Nexus verificate':'Attenzione: assenze Nexus non verificate in questa sessione';
   const legendaDettaglio=legendaColoriDettaglioPdf(dati);
   const opzioni=[{id:'totale',titolo:'Tutto l’appalto'},...REPARTI_PDF_APPALTO].map(r=>'<option value="'+r.id+'" '+(r.id===categoria?'selected':'')+'>'+escapeHtmlStampa(r.titolo)+'</option>').join('');
   document.body.insertAdjacentHTML('beforeend',`<div id="stampa-turni-overlay" class="stampa-turni-overlay" role="dialog" aria-modal="true"><div class="stampa-turni-card"><div class="stampa-turni-toolbar"><div><h2>Anteprima turni — ${escapeHtmlStampa(dati.titolo)}</h2><small>${dati.righe.length} persone · ${escapeHtmlStampa(verifica)}</small></div><div class="brow"><select class="in" aria-label="Reparto da visualizzare" onchange="apriAnteprimaTurniAppalto(this.value)">${opzioni}</select><button class="btn bo" type="button" onclick="chiudiAnteprimaTurniAppalto()">Chiudi</button><button class="btn bo" id="scarica-pdf-reparti" type="button">⬇ Tutti i reparti (.zip)</button><button class="btn bv" id="scarica-pdf-singolo" type="button">⬇ Scarica questo PDF</button></div><div id="stampa-download-stato" style="width:100%;font-size:.75rem;color:#444"></div></div><div class="stampa-turni-scroller"><div class="foglio-turni"><div class="foglio-turni-head"><div><h3>TURNI ${escapeHtmlStampa(dati.titolo)} — CASSANO MAGNAGO</h3><p>Settimana dal ${fmtDataIt(APPALTO_LUNEDI)} al ${fmtDataIt(addGiorni(APPALTO_LUNEDI,6))}</p></div><p>Generato il ${new Date().toLocaleString('it-IT')}</p></div><table class="tabella-turni-pdf"><thead><tr><th>PERSONA</th>${intestazioni}</tr></thead><tbody>${righe}</tbody></table><div class="legenda-turni"><span><i class="rep-ortofrutta"></i>Ortofrutta</span><span><i class="rep-carico"></i>Carico</span><span><i class="rep-lavaggio"></i>Lavaggio</span><span><i class="rep-economia"></i>Lavaggio forno</span><span><i class="rep-vuoti"></i>Vuoti</span><span><i class="rep-grocery"></i>Grocery</span><span><i class="cella-stampa-riposo"></i>Riposo</span><span><i class="cella-stampa-assenza"></i>Assente</span></div>${legendaDettaglio}</div></div></div></div>`);
+  const formato=formatoPdfTurni(categoria).toUpperCase();
+  const docAnteprima=creaDocumentoPdfTurni(dati);
+  if(docAnteprima){
+    const urlAnteprima=URL.createObjectURL(docAnteprima.output('blob'));
+    const scroller=document.querySelector('#stampa-turni-overlay .stampa-turni-scroller');
+    if(scroller){
+      scroller.innerHTML='<div style="padding:8px 12px;background:#fff;font-size:.8rem">'+formato+' orizzontale · '+docAnteprima.getNumberOfPages()+' pagine · Anteprima identica al PDF scaricato. <a id="apri-pdf-anteprima" target="_blank" rel="noopener">Apri PDF a schermo intero</a></div><iframe title="Anteprima PDF turni '+formato+'" style="display:block;width:100%;height:72vh;border:0"></iframe>';
+      scroller.querySelector('iframe').src=urlAnteprima;
+      scroller.querySelector('a').href=urlAnteprima;
+    }
+    document.getElementById('stampa-turni-overlay').dataset.pdfUrl=urlAnteprima;
+  }
   const overlay=document.getElementById('stampa-turni-overlay');
   overlay?.querySelector('#scarica-pdf-singolo')?.addEventListener('click',event=>scaricaPdfTurniAppalto(categoria,event.currentTarget));
   overlay?.querySelector('#scarica-pdf-reparti')?.addEventListener('click',event=>scaricaPdfTurniReparti(event.currentTarget));
 }
 function apriAnteprimaTurniReparti(){apriAnteprimaTurniAppalto('vuoti');}
-function chiudiAnteprimaTurniAppalto(){document.getElementById('stampa-turni-overlay')?.remove();}
+function chiudiAnteprimaTurniAppalto(){const el=document.getElementById('stampa-turni-overlay');if(el?.dataset.pdfUrl)URL.revokeObjectURL(el.dataset.pdfUrl);el?.remove();}
 function creaDocumentoPdfTurni(dati){
   const jsPDF=window.jspdf?.jsPDF;if(!jsPDF)return null;
   const head=[['PERSONA',...dati.giorni.map(g=>g.etichetta.slice(0,3).toUpperCase()+'\n'+fmtDataIt(g.data))]];
   const body=dati.righe.map(p=>[p.nome,...p.giorni.map(testoCellaStampa)]);
-  const categorieA4=['forno','lavaggio','ricevimento'];
-  const formato=categorieA4.includes(dati.categoria)?'a4':'a3';
-  const limitePagine=dati.categoria==='ortofrutta'?4:null;
+  const formato=formatoPdfTurni(dati.categoria);
   const notaColori='I colori delle singole mansioni corrispondono all’anteprima turni. Riposo blu - Assente rosso.';
 
   const costruisciDocumento=(fontSize,padding)=>{
     const doc=new jsPDF({orientation:'landscape',unit:'mm',format:formato,compress:true});
     const larghezzaPagina=doc.internal.pageSize.getWidth(),altezzaPagina=doc.internal.pageSize.getHeight();
     const margine=6,area=larghezzaPagina-margine*2;
-    const larghezzaNome=formato==='a4'?43:60,larghezzaGiorno=(area-larghezzaNome)/7;
+    const larghezzaNome=formato==='a4'?43:58,larghezzaGiorno=(area-larghezzaNome)/7;
     const stiliColonne={0:{cellWidth:larghezzaNome,fontStyle:'bold',fillColor:[242,243,240]}};
     for(let i=1;i<=7;i++)stiliColonne[i]={cellWidth:larghezzaGiorno};
 
@@ -2455,7 +2476,11 @@ function creaDocumentoPdfTurni(dati){
           data.cell.styles.fillColor=[219,234,254];data.cell.styles.textColor=[30,58,138];
           data.cell.styles.fontStyle='bold';data.cell.styles.halign='center';
         }else if(cella.turni.length){
-          // Il testo nativo resta invisibile: ogni mansione viene poi disegnata con lo stesso colore dell'anteprima.
+          // Riservare lo spazio reale di ogni mansione prima del disegno dei colori.
+          const larghezza=stiliColonne[data.column.index].cellWidth;
+          const altezza=cella.turni.reduce((tot,t)=>tot+misureFasciaPdf(doc,t,larghezza,fontSize).altezza,0);
+          data.cell.styles.minCellHeight=Math.max(data.cell.styles.minCellHeight||0,altezza);
+          data.cell.text=[''];
           data.cell.styles.fillColor=[255,255,255];data.cell.styles.textColor=[255,255,255];
         }
       },
@@ -2480,17 +2505,8 @@ function creaDocumentoPdfTurni(dati){
     return doc;
   };
 
-  let fontSize=formato==='a4'?6.05:(dati.categoria==='ortofrutta'?6.65:6.8);
-  let padding=formato==='a4'?1.0:(dati.categoria==='ortofrutta'?1.35:1.2);
-  let doc=costruisciDocumento(fontSize,padding);
-  if(limitePagine){
-    for(let tentativo=0;tentativo<7&&doc.getNumberOfPages()>limitePagine;tentativo++){
-      fontSize=Math.max(5.0,fontSize*.9);
-      padding=Math.max(.8,padding*.85);
-      doc=costruisciDocumento(fontSize,padding);
-    }
-  }
-  return doc;
+  // La leggibilità ha precedenza sul numero di pagine: nessuna riduzione automatica.
+  return costruisciDocumento(formato==='a4'?8.5:9,1.25);
 }
 function statoDownloadPdf(messaggio,tipo='info',link=null,nomeFile=''){
   const el=document.getElementById('stampa-download-stato');if(!el)return;
