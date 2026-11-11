@@ -1,5 +1,5 @@
 <!DOCTYPE html>
-<!-- build-pages: ortofrutta-a3-verticale-20261111 -->
+<!-- build-pages: ortofrutta-riga-unica-20261111 -->
 <html lang="it">
 <head>
 <meta charset="UTF-8">
@@ -2535,12 +2535,18 @@ function legendaColoriDettaglioPdf(dati){
 // Abbreviazioni solo di stampa: cataloghi, reparti e colori conservano i valori originali.
 function abbreviaMansionePdf(testo){
   const abbreviazioni={
-    'ricevimento ortofrutta':'Ricev. ortofrutta',
-    'navetta ortofrutta':'Navetta ortofr.',
-    'gestione baie primo giro':'Gest. baie 1° giro',
-    'gestione reparto':'Gest. reparto',
-    'allestimento sala':'Allest. sala',
-    'preparazione ordini':'Prep. ordini'
+    'ventilazione':'Vent.',
+    'ricevimento':'Ricev.',
+    'ricevimento ortofrutta':'Ricev.',
+    'legaggio':'Leg.',
+    'navetta':'Nav.',
+    'navetta ortofrutta':'Nav.',
+    'gestione baie primo giro':'Baie 1° g.',
+    'gestione reparto':'Gest. rep.',
+    'allestimento sala':'Allest.',
+    'preparazione ordini':'Prep.',
+    'pulizie':'Pul.',
+    'formazione':'Form.'
   };
   return abbreviazioni[String(testo||'').trim().toLocaleLowerCase('it-IT')]||testo;
 }
@@ -2549,7 +2555,7 @@ function testoMansioneTurnoPdf(turno,categoria='totale'){
   const reparto=testoPulitoStampa(turno?.reparto),originale=testoPulitoStampa(turno?.attivita);
   const attivita=categoria==='ortofrutta'?abbreviaMansionePdf(originale):originale;
   if(/economia/i.test(reparto))return attivita||'Attività';
-  return reparto+(attivita?(categoria==='ortofrutta'?'\n':' - ')+attivita:'');
+  return reparto+(attivita?(categoria==='ortofrutta'?' · ':' - ')+attivita:'');
 }
 function orientamentoPdfTurni(categoria){return categoria==='ortofrutta'?'portrait':'landscape';}
 function formatoPdfTurni(categoria){
@@ -2558,7 +2564,18 @@ function formatoPdfTurni(categoria){
 function misureFasciaPdf(doc,turno,larghezza,fontBase,categoria='totale'){
   const fontOra=fontBase,fontTesto=fontBase*.92,padding=categoria==='ortofrutta'?0.85:1.25;
   doc.setFont('helvetica','normal');doc.setFontSize(fontTesto);
-  const righe=doc.splitTextToSize(testoMansioneTurnoPdf(turno,categoria),larghezza-padding*2);
+  const spazio=larghezza-padding*2;
+  let testo=testoMansioneTurnoPdf(turno,categoria);
+  if(categoria==='ortofrutta'&&doc.getTextWidth(testo)>spazio){
+    // Mantiene intero il reparto; accorcia solo la mansione per stare su una riga.
+    const reparto=testoPulitoStampa(turno?.reparto);
+    const prefisso=/economia/i.test(reparto)||categoriaDirettaPdfTurno(turno)==='forno'?'':reparto+' · ';
+    let mansione=prefisso?testo.slice(prefisso.length):testo;
+    mansione=mansione.replace(/\.$/,'');
+    while(mansione.length>1&&doc.getTextWidth(prefisso+mansione+'.')>spazio)mansione=mansione.slice(0,-1).trimEnd();
+    testo=prefisso+mansione+'.';
+  }
+  const righe=categoria==='ortofrutta'?[testo]:doc.splitTextToSize(testo,spazio);
   const passoOra=fontOra*.352778*1.15,passoTesto=fontTesto*.352778*1.15;
   return{fontOra,fontTesto,padding,righe,passoOra,passoTesto,altezza:padding*2+passoOra+righe.length*passoTesto};
 }
