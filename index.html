@@ -1,5 +1,5 @@
 <!DOCTYPE html>
-<!-- build-pages: pdf-ortofrutta-separatori-bianchi-spessi-20261113 -->
+<!-- build-pages: pdf-appalto-separatori-bianchi-spessi-20261113 -->
 <html lang="it">
 <head>
 <meta charset="UTF-8">
@@ -2723,7 +2723,7 @@ function creaDocumentoPdfTurni(dati){
         if(!cella.assenza&&!cella.riposo&&cella.turni.length){
           disegnaTurniColoratiPdf(doc,data.cell,cella,dati.categoria,fontSize);
         }
-        if(dati.categoria==='ortofrutta'&&data.column.index===7){
+        if(['ortofrutta','totale'].includes(dati.categoria)&&data.column.index===7){
           // Una linea continua distingue le persone; le fasce interne restano sottili.
           doc.saveGraphicsState();
           doc.setDrawColor(255,255,255);doc.setLineWidth(1);
