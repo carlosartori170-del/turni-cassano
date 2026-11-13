@@ -1,5 +1,5 @@
 <!DOCTYPE html>
-<!-- build-pages: pdf-appalto-separatori-bianchi-spessi-20261113 -->
+<!-- build-pages: export-excel-appalto-20261113 -->
 <html lang="it">
 <head>
 <meta charset="UTF-8">
@@ -1155,8 +1155,8 @@ function renderProgrammazioneAppaltoTab(){
   document.getElementById('mc').innerHTML=`<div class="card"><div class="ct">Programmazione dell'intero appalto</div>
     <div class="alert aok">Programmatore unico collegato a Supabase: ogni fascia appartiene alla persona, anche quando nella stessa giornata cambia reparto o attività. Ogni modifica viene salvata subito in bozza sul computer e poi automaticamente su Supabase dopo pochi secondi. Il salvataggio automatico aggiorna Supabase dopo pochi secondi; il pulsante “Salva settimana” salva immediatamente.</div>
     <div class="g2 no-print" style="max-width:520px;"><div class="fg"><label>Lunedì della settimana</label><input type="date" id="appalto-lun" value="${APPALTO_LUNEDI}" onchange="caricaSettimanaAppalto(this.value)"></div><div class="fg"><label>Reparto</label><select id="appalto-rep" onchange="APPALTO_REPARTO=this.value;renderCorpoAppalto()"></select></div></div>
-    <div class="brow no-print"><button class="btn bv bsm" onclick="salvaSettimanaSupabase()">💾 Salva settimana</button><button id="appalto-annulla" class="btn bo bsm" onclick="annullaUltimaModificaAppalto()">↶ Annulla modifica</button><button class="btn bo bsm" onclick="apriStoricoSettimana()">🕘 Storico / ripristina</button><span id="appalto-autosalvataggio" style="align-self:center;font-size:12px;color:var(--grigio);font-weight:600">${APPALTO_SALVATAGGIO_STATO}</span><button class="btn bp bsm" onclick="creaDaSettimanaPrecedente()">↪ Crea dalla settimana precedente</button><button class="btn bo bsm" onclick="aggiungiFasciaAppalto()">＋ Aggiungi fascia</button><button id="appalto-seleziona-replica" class="btn bo bsm" onclick="toggleSelezioneReplica()">☑ Seleziona turni</button><button id="appalto-seleziona-filtrati" class="btn bo bsm" style="display:none" onclick="toggleReplicaFiltrati()">☑ Seleziona tutti i filtrati</button><button id="appalto-conferma-replica" class="btn bv bsm" style="display:none" onclick="apriReplicaSelezionati()">↻ Replica selezionati (0)</button><button class="btn bo bsm" onclick="ordinaNominativiAppalto()">A–Z Riordina nominativi</button><button class="btn bo bsm" onclick="controllaAssenzeAppalto()">🔎 Controlla assenze Nexus</button><button class="btn bo bsm" onclick="APPALTO_SOLO_ASSENTI=!APPALTO_SOLO_ASSENTI;renderCorpoAppalto()">Solo da sostituire</button><button class="btn bo bsm" onclick="APPALTO_VISTA_PERSONE=!APPALTO_VISTA_PERSONE;renderCorpoAppalto()">Vista persone/reparto</button><button id="toggle-vista-settimana" class="btn bv bsm" onclick="toggleVistaProgrammazioneAppalto()">▦ Vista settimanale / giornaliera</button><button class="btn bo bsm" onclick="apriAnteprimaTurniAppalto()">📄 Anteprima / PDF</button><button class="btn bo bsm" onclick="apriAnteprimaTurniReparti()">📚 PDF per reparti</button></div>
-    <div id="appalto-msg"></div><div id="appalto-tabs"></div><div id="appalto-of"></div><div id="appalto-controlli"></div><div id="appalto-filtri"></div><div id="appalto-personale"></div><div id="appalto-body"></div></div>`;
+    <div class="brow no-print"><button class="btn bv bsm" onclick="salvaSettimanaSupabase()">💾 Salva settimana</button><button id="appalto-annulla" class="btn bo bsm" onclick="annullaUltimaModificaAppalto()">↶ Annulla modifica</button><button class="btn bo bsm" onclick="apriStoricoSettimana()">🕘 Storico / ripristina</button><span id="appalto-autosalvataggio" style="align-self:center;font-size:12px;color:var(--grigio);font-weight:600">${APPALTO_SALVATAGGIO_STATO}</span><button class="btn bp bsm" onclick="creaDaSettimanaPrecedente()">↪ Crea dalla settimana precedente</button><button class="btn bo bsm" onclick="aggiungiFasciaAppalto()">＋ Aggiungi fascia</button><button id="appalto-seleziona-replica" class="btn bo bsm" onclick="toggleSelezioneReplica()">☑ Seleziona turni</button><button id="appalto-seleziona-filtrati" class="btn bo bsm" style="display:none" onclick="toggleReplicaFiltrati()">☑ Seleziona tutti i filtrati</button><button id="appalto-conferma-replica" class="btn bv bsm" style="display:none" onclick="apriReplicaSelezionati()">↻ Replica selezionati (0)</button><button class="btn bo bsm" onclick="ordinaNominativiAppalto()">A–Z Riordina nominativi</button><button class="btn bo bsm" onclick="controllaAssenzeAppalto()">🔎 Controlla assenze Nexus</button><button class="btn bo bsm" onclick="APPALTO_SOLO_ASSENTI=!APPALTO_SOLO_ASSENTI;renderCorpoAppalto()">Solo da sostituire</button><button class="btn bo bsm" onclick="APPALTO_VISTA_PERSONE=!APPALTO_VISTA_PERSONE;renderCorpoAppalto()">Vista persone/reparto</button><button id="toggle-vista-settimana" class="btn bv bsm" onclick="toggleVistaProgrammazioneAppalto()">▦ Vista settimanale / giornaliera</button><button class="btn bo bsm" onclick="apriAnteprimaTurniAppalto()">📄 Anteprima / PDF</button><button class="btn bo bsm" type="button" onclick="esportaExcelTurniAppalto(this)">📊 Esporta Excel appalto</button><button class="btn bo bsm" onclick="apriAnteprimaTurniReparti()">📚 PDF per reparti</button></div>
+    <div id="appalto-excel-download" aria-live="polite"></div><div id="appalto-msg"></div><div id="appalto-tabs"></div><div id="appalto-of"></div><div id="appalto-controlli"></div><div id="appalto-filtri"></div><div id="appalto-personale"></div><div id="appalto-body"></div></div>`;
   caricaSettimanaAppalto(APPALTO_LUNEDI);
 }
 function caricaSettimanaAppalto(lunedi,opzioni={}){
@@ -2749,6 +2749,51 @@ function creaDocumentoPdfTurni(dati){
   // Gli altri reparti mantengono le dimensioni già in uso.
   return costruisciDocumento(dati.categoria==='ortofrutta'?7.2:formato==='a4'?8.5:9,dati.categoria==='ortofrutta'?1:1.25);
 }
+function xmlTurniExcel(valore){
+  return String(valore??'').replace(/[\u0000-\u0008\u000B\u000C\u000E-\u001F]/g,'').replace(/[&<>"']/g,c=>({'&':'&amp;','<':'&lt;','>':'&gt;','"':'&quot;',"'":'&apos;'}[c]));
+}
+async function creaExcelTurniAppalto(dati,lunedi){
+  if(!window.JSZip)throw new Error('Il generatore Excel non è disponibile.');
+  const zip=new window.JSZip(),ns='http://schemas.openxmlformats.org/spreadsheetml/2006/main';
+  // Celle di testo esplicite: nomi e mansioni non vengono mai interpretati come formule.
+  const cella=(r,c,testo,stile=0)=>'<c r="'+String.fromCharCode(65+c)+r+'" t="inlineStr" s="'+stile+'"><is><t xml:space="preserve">'+xmlTurniExcel(testo)+'</t></is></c>';
+  const righe=[
+    '<row r="1" ht="26" customHeight="1">'+cella(1,0,'TURNI TUTTO L’APPALTO — CASSANO MAGNAGO',1)+'</row>',
+    '<row r="2" ht="22" customHeight="1">'+cella(2,0,'Settimana dal '+fmtDataIt(lunedi)+' al '+fmtDataIt(addGiorni(lunedi,6))+' · '+dati.righe.length+' persone',2)+'</row>',
+    '<row r="3" ht="36" customHeight="1">'+['PERSONA',...dati.giorni.map(g=>g.etichetta+'\n'+fmtDataIt(g.data)),'ID Dipendente'].map((v,i)=>cella(3,i,v,1)).join('')+'</row>'
+  ];
+  dati.righe.forEach((p,i)=>{
+    const r=i+4,testi=p.giorni.map(g=>testoCellaStampa(g));
+    const altezza=Math.min(409,Math.max(34,...testi.map(t=>t.split('\n').reduce((n,l)=>n+Math.max(1,Math.ceil(l.length/34)),0)*14+12)));
+    righe.push('<row r="'+r+'" ht="'+altezza+'" customHeight="1">'+cella(r,0,p.nome,3)+p.giorni.map((g,c)=>cella(r,c+1,testi[c],g.assenza?5:g.riposo?4:0)).join('')+cella(r,8,p.id??'')+'</row>');
+  });
+  const fine=dati.righe.length+3;
+  zip.file('[Content_Types].xml','<?xml version="1.0" encoding="UTF-8"?><Types xmlns="http://schemas.openxmlformats.org/package/2006/content-types"><Default Extension="rels" ContentType="application/vnd.openxmlformats-package.relationships+xml"/><Default Extension="xml" ContentType="application/xml"/><Override PartName="/xl/workbook.xml" ContentType="application/vnd.openxmlformats-officedocument.spreadsheetml.sheet.main+xml"/><Override PartName="/xl/worksheets/sheet1.xml" ContentType="application/vnd.openxmlformats-officedocument.spreadsheetml.worksheet+xml"/><Override PartName="/xl/styles.xml" ContentType="application/vnd.openxmlformats-officedocument.spreadsheetml.styles+xml"/></Types>');
+  const relns='http://schemas.openxmlformats.org/package/2006/relationships',tipo='http://schemas.openxmlformats.org/officeDocument/2006/relationships/';
+  zip.file('_rels/.rels','<Relationships xmlns="'+relns+'"><Relationship Id="rId1" Type="'+tipo+'officeDocument" Target="xl/workbook.xml"/></Relationships>');
+  zip.file('xl/workbook.xml','<workbook xmlns="'+ns+'" xmlns:r="http://schemas.openxmlformats.org/officeDocument/2006/relationships"><sheets><sheet name="Turni appalto" sheetId="1" r:id="rId1"/></sheets><definedNames><definedName name="_xlnm.Print_Area" localSheetId="0">\'Turni appalto\'!$A$1:$H$'+fine+'</definedName><definedName name="_xlnm.Print_Titles" localSheetId="0">\'Turni appalto\'!$3:$3</definedName></definedNames></workbook>');
+  zip.file('xl/_rels/workbook.xml.rels','<Relationships xmlns="'+relns+'"><Relationship Id="rId1" Type="'+tipo+'worksheet" Target="worksheets/sheet1.xml"/><Relationship Id="rId2" Type="'+tipo+'styles" Target="styles.xml"/></Relationships>');
+  const xf=(font,fill)=>'<xf numFmtId="0" fontId="'+font+'" fillId="'+fill+'" borderId="1" xfId="0" applyAlignment="1" applyFill="1" applyFont="1"><alignment vertical="top" wrapText="1"/></xf>';
+  zip.file('xl/styles.xml','<styleSheet xmlns="'+ns+'"><fonts count="3"><font><sz val="11"/><name val="Calibri"/></font><font><b/><sz val="11"/><color rgb="FFFFFFFF"/><name val="Calibri"/></font><font><b/><sz val="11"/><name val="Calibri"/></font></fonts><fills count="6"><fill><patternFill patternType="none"/></fill><fill><patternFill patternType="gray125"/></fill>'+['FF1B5E35','FFF2F3F0','FFDBEAFE','FFFEE2E2'].map(c=>'<fill><patternFill patternType="solid"><fgColor rgb="'+c+'"/><bgColor indexed="64"/></patternFill></fill>').join('')+'</fills><borders count="2"><border/><border><left style="thin"><color rgb="FFD1D5DB"/></left><right style="thin"><color rgb="FFD1D5DB"/></right><top style="thin"><color rgb="FFD1D5DB"/></top><bottom style="thin"><color rgb="FFD1D5DB"/></bottom></border></borders><cellStyleXfs count="1"><xf numFmtId="0" fontId="0" fillId="0" borderId="0"/></cellStyleXfs><cellXfs count="6">'+xf(0,0)+xf(1,2)+xf(0,0)+xf(2,3)+xf(2,4)+xf(2,5)+'</cellXfs><cellStyles count="1"><cellStyle name="Normal" xfId="0" builtinId="0"/></cellStyles></styleSheet>');
+  zip.file('xl/worksheets/sheet1.xml','<worksheet xmlns="'+ns+'"><sheetPr><pageSetUpPr fitToPage="1"/></sheetPr><dimension ref="A1:I'+fine+'"/><sheetViews><sheetView workbookViewId="0"><pane xSplit="1" ySplit="3" topLeftCell="B4" activePane="bottomRight" state="frozen"/></sheetView></sheetViews><sheetFormatPr defaultRowHeight="18"/><cols><col min="1" max="1" width="32" customWidth="1"/><col min="2" max="8" width="38" customWidth="1"/><col min="9" max="9" hidden="1" width="14" customWidth="1"/></cols><sheetData>'+righe.join('')+'</sheetData><autoFilter ref="A3:I'+fine+'"/><mergeCells count="2"><mergeCell ref="A1:H1"/><mergeCell ref="A2:H2"/></mergeCells><pageMargins left="0.25" right="0.25" top="0.3" bottom="0.3" header="0.1" footer="0.1"/><pageSetup paperSize="8" orientation="landscape" fitToWidth="1" fitToHeight="0"/></worksheet>');
+  return zip.generateAsync({type:'blob',mimeType:'application/vnd.openxmlformats-officedocument.spreadsheetml.sheet',compression:'DEFLATE'});
+}
+async function esportaExcelTurniAppalto(bottone){
+  const testo=bottone?.textContent,lunedi=APPALTO_LUNEDI;
+  try{
+    const dati=datiStampaTurniAppalto();
+    if(!dati?.righe.length){toast('Non ci sono turni da esportare nella settimana selezionata.','warn');return;}
+    if(bottone){bottone.disabled=true;bottone.textContent='Preparazione Excel…';}
+    const blob=await creaExcelTurniAppalto(dati,lunedi),url=URL.createObjectURL(blob),nome='Turni_Cassano_Tutto_Appalto_'+lunedi+'.xlsx';
+    const link=document.createElement('a');link.href=url;link.download=nome;link.textContent='Scarica Excel — settimana '+fmtDataIt(lunedi);link.style.cssText='display:inline-block;margin:8px 0;text-decoration:underline;font-weight:700';
+    const stato=document.getElementById('appalto-excel-download');
+    if(stato){stato.replaceChildren(link);}else{document.body.appendChild(link);}
+    link.click();toast('Excel pronto: tutti i reparti della settimana selezionata.','ok');
+    setTimeout(()=>{URL.revokeObjectURL(url);link.remove();},300000);
+  }catch(error){console.error('Esportazione Excel appalto',error);toast('Esportazione Excel non riuscita: '+(error?.message||error),'err');}
+  finally{if(bottone){bottone.disabled=false;bottone.textContent=testo;}}
+}
+
 function statoDownloadPdf(messaggio,tipo='info',link=null,nomeFile=''){
   const el=document.getElementById('stampa-download-stato');if(!el)return;
   const colore=tipo==='errore'?'#991b1b':tipo==='ok'?'#0b6b38':'#444';
