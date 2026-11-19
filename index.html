@@ -405,6 +405,14 @@ DEFAULT_CONFIG_APPALTO.fabbisogni={
   grocery:DEFAULT_CONFIG_APPALTO.grocery.map(g=>g.map((n,i)=>({attivita:GROCERY_MODELLI[i][0],inizio:GROCERY_MODELLI[i][1],fine:GROCERY_MODELLI[i][2],persone:n})).filter(x=>x.persone>0))
 };
 let CONFIG_APPALTO=caricaConfigAppaltoLocale();
+let CONFIG_EDITOR, CONFIG_EDITOR_LUNEDI='';
+function configDellaSettimana(lunedi=APPALTO_LUNEDI){const dati=APPALTO_SETTIMANE[lunedi]?.configurazione;return dati?{...DEFAULT_CONFIG_APPALTO,...dati,fabbisogni:{...DEFAULT_CONFIG_APPALTO.fabbisogni,...dati.fabbisogni}}:CONFIG_APPALTO;}
+function apriConfigAppalto(settimana){
+  CONFIG_EDITOR_LUNEDI=settimana?APPALTO_LUNEDI:'';
+  CONFIG_EDITOR=structuredClone(settimana?configDellaSettimana():CONFIG_APPALTO);
+  const contenitore=document.getElementById('cfg-appalto');
+  if(contenitore)contenitore.innerHTML=renderConfigAppaltoHtml();
+}
 let CFG_GIORNO_FABB=0;
 let REPARTI=[]; // catalogo reparti Cassano (sola lettura da Nexus)
 let ATTIVITA_TUTTE=[]; // catalogo attività Cassano, con ID_Reparto (sola lettura da Nexus)
@@ -429,15 +437,30 @@ function caricaConfigAppaltoLocale(){
 function impostaPercorso(obj,path,val){const parti=path.split('.');let nodo=obj;parti.slice(0,-1).forEach(p=>nodo=nodo[p]);nodo[parti.at(-1)]=val;}
 async function salvaConfigAppaltoLocale(){
   aggiornaFabbisogniDaDom();
-  document.querySelectorAll('[data-config-path]').forEach(el=>impostaPercorso(CONFIG_APPALTO,el.dataset.configPath,el.type==='number'?Number(el.value):el.value));
-  localStorage.setItem(CONFIG_APPALTO_KEY,JSON.stringify(CONFIG_APPALTO));
+  document.querySelectorAll('[data-config-path]').forEach(el=>impostaPercorso(CONFIG_EDITOR,el.dataset.configPath,el.type==='number'?Number(el.value):el.value));
+  const dati=structuredClone(CONFIG_EDITOR);
+  const lunedi=CONFIG_EDITOR_LUNEDI;
+  if(lunedi){
+    if(!SESSIONE_CASSANO||!APPALTO_SETTIMANE[lunedi]){toast('Crea e salva prima la settimana in Programmazione.','warn');return;}
+    const {data,error}=await sb.from('SettimaneCassano').update({Configurazione:dati}).eq('Lunedi',lunedi).eq('ID_Magazzino',ID_MAGAZZINO_CASSANO).select('Lunedi').maybeSingle();
+    if(error||!data){toast('Configurazione non salvata: '+(error?.message||'salva prima la settimana in Programmazione.'),'err');return;}
+    if(APPALTO_SETTIMANE[lunedi])APPALTO_SETTIMANE[lunedi].configurazione=dati;
+    salvaSettimaneAppalto({silenzioso:true});
+    toast('Configurazione della settimana salvata.');return;
+  }
+  if(!SESSIONE_CASSANO){CONFIG_APPALTO=dati;localStorage.setItem(CONFIG_APPALTO_KEY,JSON.stringify(dati));}
   if(!SESSIONE_CASSANO){toast('Configurazione salvata soltanto sul dispositivo: sessione non attiva.','warn');return;}
   statoSync('Salvataggio configurazione…');
-  const{error}=await sb.from('ConfigurazioneCassano').upsert({ID_Magazzino:ID_MAGAZZINO_CASSANO,Dati:CONFIG_APPALTO,AggiornatoIl:new Date().toISOString(),AggiornatoDa:SESSIONE_CASSANO.user.id},{onConflict:'ID_Magazzino'});
+  const{error}=await sb.from('ConfigurazioneCassano').upsert({ID_Magazzino:ID_MAGAZZINO_CASSANO,Dati:dati,AggiornatoIl:new Date().toISOString(),AggiornatoDa:SESSIONE_CASSANO.user.id},{onConflict:'ID_Magazzino'});
   if(error){statoSync('Errore di salvataggio');toast('Configurazione non salvata su Supabase: '+error.message,'err');return;}
+  CONFIG_APPALTO=dati;scriviLocaleAppalto(CONFIG_APPALTO_KEY,JSON.stringify(dati));
   statoSync('Configurazione sincronizzata');toast('Configurazione salvata su Supabase.');
 }
-function ripristinaConfigAppaltoLocale(){if(!confirm('Ripristinare tutti gli standard appalto ai valori iniziali?'))return;CONFIG_APPALTO=structuredClone(DEFAULT_CONFIG_APPALTO);localStorage.removeItem(CONFIG_APPALTO_KEY);renderConfigTab();}
+function ripristinaConfigAppaltoLocale(){
+  if(!confirm('Ripristinare i valori di partenza della configurazione aperta?'))return;
+  CONFIG_EDITOR=structuredClone(CONFIG_EDITOR_LUNEDI?CONFIG_APPALTO:DEFAULT_CONFIG_APPALTO);
+  document.getElementById('cfg-appalto').innerHTML=renderConfigAppaltoHtml();
+}
 function inputCfg(path,value,tipo='number',step='1'){return `<input class="cfg-input ${tipo==='time'?'cfg-time':''}" type="${tipo}" step="${step}" value="${value}" data-config-path="${path}">`;}
 function minutiOra(ora){const[a,b]=String(ora||'00:00').split(':').map(Number);return a*60+b;}
 function oraMinuti(min){const giorno=min>=1440?' +1':'';min=((min%1440)+1440)%1440;return `${String(Math.floor(min/60)).padStart(2,'0')}:${String(min%60).padStart(2,'0')}${giorno}`;}
@@ -449,8 +472,8 @@ function collegaFabbisognoCatalogo(rep,r){
   const elenco=attivitaFabbisognoCatalogo(rep),id=Number(r?.id_attivita)||0;
   return elenco.find(a=>Number(a.ID_Attivita)===id)||elenco.find(a=>nomeCatalogoSenzaPrefisso(nomeAttivita(a))===nomeCatalogoSenzaPrefisso(r?.attivita))||null;
 }
-function normalizzaFabbisogniCatalogo(){
-  ['vuoti','grocery'].forEach(rep=>(CONFIG_APPALTO.fabbisogni?.[rep]||[]).forEach(giorno=>(giorno||[]).forEach(r=>{const a=collegaFabbisognoCatalogo(rep,r);if(a){r.id_attivita=Number(a.ID_Attivita);r.attivita=nomeAttivita(a);}})));
+function normalizzaFabbisogniCatalogo(config=configDellaSettimana()){
+  ['vuoti','grocery'].forEach(rep=>(config.fabbisogni?.[rep]||[]).forEach(giorno=>(giorno||[]).forEach(r=>{const a=collegaFabbisognoCatalogo(rep,r);if(a){r.id_attivita=Number(a.ID_Attivita);r.attivita=nomeAttivita(a);}})));
 }
 function opzioniAttivita(rep,r){
   if(rep==='ceste'||rep==='forno')return `<option value="">${rep==='ceste'?'Lavaggio ceste':'Lavaggio forno'}</option>`;
@@ -459,7 +482,7 @@ function opzioniAttivita(rep,r){
   return `${nonCollegata}${attivitaFabbisognoCatalogo(rep).map(a=>`<option value="${a.ID_Attivita}" ${String(a.ID_Attivita)===id?'selected':''}>${testoHtmlAppalto(nomeAttivita(a))}</option>`).join('')}`;
 }
 function righeFabbisognoHtml(rep){
-  const righe=CONFIG_APPALTO.fabbisogni[rep][CFG_GIORNO_FABB]||[];
+  const righe=CONFIG_EDITOR.fabbisogni[rep][CFG_GIORNO_FABB]||[];
   if(rep==='vuoti'||rep==='grocery')righe.sort((a,b)=>nomeCatalogoSenzaPrefisso(a.attivita).localeCompare(nomeCatalogoSenzaPrefisso(b.attivita),'it',{sensitivity:'base'})||minutiOra(a.inizio)-minutiOra(b.inizio)||minutiOra(a.fine)-minutiOra(b.fine));
   return righe.map((r,i)=>`<tr data-fabb-riga data-rep="${rep}">
     <td><select data-campo="attivita" style="padding:5px;border:1px solid var(--bordo);border-radius:5px;">${opzioniAttivita(rep,r)}</select></td>
@@ -470,7 +493,7 @@ function righeFabbisognoHtml(rep){
     <td><button class="btn br bsm" onclick="rimuoviFascia('${rep}',${i})">Elimina</button></td></tr>`).join('')||'<tr><td colspan="6" class="empty">Nessuna fascia richiesta.</td></tr>';
 }
 function grigliaMezzOreHtml(rep){
-  const righe=CONFIG_APPALTO.fabbisogni[rep][CFG_GIORNO_FABB]||[];
+  const righe=CONFIG_EDITOR.fabbisogni[rep][CFG_GIORNO_FABB]||[];
   if(!righe.length)return '<div class="empty">Aggiungi una fascia per vedere la copertura.</div>';
   const intervalli=righe.map(intervalloFabbisogno);
   const da=Math.floor(Math.min(...intervalli.map(r=>r.inizio))/30)*30;
@@ -482,20 +505,20 @@ function grigliaMezzOreHtml(rep){
 function editorRepartoHtml(rep,titolo){return `<div class="card" style="box-shadow:none;margin:10px 0;"><div class="ct">${titolo}</div><div class="tw"><table><thead><tr><th>Attività</th><th>Dalle</th><th>Alle</th><th>Persone contemporanee</th><th>Ore richieste</th><th></th></tr></thead><tbody>${righeFabbisognoHtml(rep)}</tbody></table></div><div class="brow"><button class="btn bo bsm" onclick="aggiungiFascia('${rep}')">＋ Aggiungi fascia</button><button class="btn bo bsm" onclick="aggiornaAnteprimaFabbisogni()">↻ Aggiorna anteprima</button><button class="btn bo bsm" onclick="copiaFabbisognoSettimana('${rep}')">Copia questo giorno su tutta la settimana</button><button class="btn bo bsm" onclick="copiaFabbisognoGiorniSelezionati('${rep}')">Copia questo giorno sui giorni selezionati</button></div><fieldset class="cfg-copy-days"><legend>Giorni su cui copiare le fasce di ${titolo}</legend><div>${GIORNI.map((g,i)=>`<label><input type="checkbox" data-fabb-copia="${rep}" value="${i}" ${i===CFG_GIORNO_FABB?'disabled':''}><span>${g}${i===CFG_GIORNO_FABB?' (giorno di origine)':''}</span></label>`).join('')}</div></fieldset><p class="cfg-note" style="margin-top:14px;">Anteprima automatica del fabbisogno ogni 30 minuti</p>${grigliaMezzOreHtml(rep)}</div>`;}
 function renderEditorFabbisogniHtml(){return `${editorRepartoHtml('ceste','Lavaggio ceste')}${editorRepartoHtml('forno','Lavaggio forno')}${editorRepartoHtml('vuoti','Vuoti')}${editorRepartoHtml('grocery','Grocery')}`;}
 function aggiornaFabbisogniDaDom(){
-  ['ceste','forno','vuoti','grocery'].forEach(rep=>{const nodi=[...document.querySelectorAll(`[data-fabb-riga][data-rep="${rep}"]`)];if(!nodi.length)return;CONFIG_APPALTO.fabbisogni[rep][CFG_GIORNO_FABB]=nodi.map(tr=>{const get=c=>tr.querySelector(`[data-campo="${c}"]`).value,idAttivita=Number(get('attivita'))||null,a=idAttivita?trovaAttivita(idAttivita):null;return{attivita:rep==='ceste'?'Lavaggio ceste':rep==='forno'?'Lavaggio forno':a?nomeAttivita(a):'',id_attivita:idAttivita,inizio:get('inizio'),fine:get('fine'),persone:Number(get('persone'))||1};});});
+  ['ceste','forno','vuoti','grocery'].forEach(rep=>{const nodi=[...document.querySelectorAll(`[data-fabb-riga][data-rep="${rep}"]`)];if(!nodi.length)return;CONFIG_EDITOR.fabbisogni[rep][CFG_GIORNO_FABB]=nodi.map(tr=>{const get=c=>tr.querySelector(`[data-campo="${c}"]`).value,idAttivita=Number(get('attivita'))||null,a=idAttivita?trovaAttivita(idAttivita):null;return{attivita:rep==='ceste'?'Lavaggio ceste':rep==='forno'?'Lavaggio forno':a?nomeAttivita(a):'',id_attivita:idAttivita,inizio:get('inizio'),fine:get('fine'),persone:Number(get('persone'))||1};});});
 }
 function cambiaGiornoFabb(v){aggiornaFabbisogniDaDom();CFG_GIORNO_FABB=Number(v);document.getElementById('cfg-fabbisogni-editor').innerHTML=renderEditorFabbisogniHtml();}
 function aggiornaAnteprimaFabbisogni(){aggiornaFabbisogniDaDom();document.getElementById('cfg-fabbisogni-editor').innerHTML=renderEditorFabbisogniHtml();}
-function aggiungiFascia(rep){aggiornaFabbisogniDaDom();const attivita=rep==='ceste'?'Lavaggio ceste':rep==='forno'?'Lavaggio forno':'';CONFIG_APPALTO.fabbisogni[rep][CFG_GIORNO_FABB].push({attivita,id_attivita:null,inizio:'06:00',fine:'12:30',persone:1});document.getElementById('cfg-fabbisogni-editor').innerHTML=renderEditorFabbisogniHtml();}
-function rimuoviFascia(rep,i){aggiornaFabbisogniDaDom();CONFIG_APPALTO.fabbisogni[rep][CFG_GIORNO_FABB].splice(i,1);document.getElementById('cfg-fabbisogni-editor').innerHTML=renderEditorFabbisogniHtml();}
-function copiaFabbisognoSettimana(rep){aggiornaFabbisogniDaDom();if(!confirm(`Copiare le fasce di ${rep} di ${GIORNI[CFG_GIORNO_FABB]} su tutti gli altri giorni?`))return;const modello=CONFIG_APPALTO.fabbisogni[rep][CFG_GIORNO_FABB];CONFIG_APPALTO.fabbisogni[rep]=GIORNI.map(()=>structuredClone(modello));toast('Fabbisogno copiato su tutta la settimana.');}
-function copiaFabbisognoGiorniSelezionati(rep){if(!['ceste','forno','vuoti','grocery'].includes(rep))return;const giorni=[...new Set([...document.querySelectorAll(`input[data-fabb-copia="${rep}"]:checked:not(:disabled)`)].map(el=>Number(el.value)))].filter(g=>Number.isInteger(g)&&g>=0&&g<GIORNI.length&&g!==CFG_GIORNO_FABB);if(!giorni.length){toast('Spunta almeno un giorno di destinazione per questo reparto.','warn');return;}const titolo={ceste:'Lavaggio ceste',forno:'Lavaggio forno',vuoti:'Vuoti',grocery:'Grocery'}[rep];if(!confirm(`Copiare le fasce di ${titolo} di ${GIORNI[CFG_GIORNO_FABB]} su ${giorni.map(g=>GIORNI[g]).join(', ')}? Le fasce già presenti nei soli giorni selezionati verranno sostituite.`))return;aggiornaFabbisogniDaDom();const modello=CONFIG_APPALTO.fabbisogni[rep][CFG_GIORNO_FABB]||[];giorni.forEach(g=>{CONFIG_APPALTO.fabbisogni[rep][g]=structuredClone(modello);});toast('Fabbisogno copiato sui giorni selezionati. Premi Salva configurazione per conservarlo.');}
+function aggiungiFascia(rep){aggiornaFabbisogniDaDom();const attivita=rep==='ceste'?'Lavaggio ceste':rep==='forno'?'Lavaggio forno':'';CONFIG_EDITOR.fabbisogni[rep][CFG_GIORNO_FABB].push({attivita,id_attivita:null,inizio:'06:00',fine:'12:30',persone:1});document.getElementById('cfg-fabbisogni-editor').innerHTML=renderEditorFabbisogniHtml();}
+function rimuoviFascia(rep,i){aggiornaFabbisogniDaDom();CONFIG_EDITOR.fabbisogni[rep][CFG_GIORNO_FABB].splice(i,1);document.getElementById('cfg-fabbisogni-editor').innerHTML=renderEditorFabbisogniHtml();}
+function copiaFabbisognoSettimana(rep){aggiornaFabbisogniDaDom();if(!confirm(`Copiare le fasce di ${rep} di ${GIORNI[CFG_GIORNO_FABB]} su tutti gli altri giorni?`))return;const modello=CONFIG_EDITOR.fabbisogni[rep][CFG_GIORNO_FABB];CONFIG_EDITOR.fabbisogni[rep]=GIORNI.map(()=>structuredClone(modello));toast('Fabbisogno copiato su tutta la settimana.');}
+function copiaFabbisognoGiorniSelezionati(rep){if(!['ceste','forno','vuoti','grocery'].includes(rep))return;const giorni=[...new Set([...document.querySelectorAll(`input[data-fabb-copia="${rep}"]:checked:not(:disabled)`)].map(el=>Number(el.value)))].filter(g=>Number.isInteger(g)&&g>=0&&g<GIORNI.length&&g!==CFG_GIORNO_FABB);if(!giorni.length){toast('Spunta almeno un giorno di destinazione per questo reparto.','warn');return;}const titolo={ceste:'Lavaggio ceste',forno:'Lavaggio forno',vuoti:'Vuoti',grocery:'Grocery'}[rep];if(!confirm(`Copiare le fasce di ${titolo} di ${GIORNI[CFG_GIORNO_FABB]} su ${giorni.map(g=>GIORNI[g]).join(', ')}? Le fasce già presenti nei soli giorni selezionati verranno sostituite.`))return;aggiornaFabbisogniDaDom();const modello=CONFIG_EDITOR.fabbisogni[rep][CFG_GIORNO_FABB]||[];giorni.forEach(g=>{CONFIG_EDITOR.fabbisogni[rep][g]=structuredClone(modello);});toast('Fabbisogno copiato sui giorni selezionati. Premi Salva configurazione per conservarlo.');}
 function renderConfigAppaltoHtml(){
-  normalizzaFabbisogniCatalogo();
-  const carico=GIORNI.map((g,i)=>`<tr><td>${g}</td><td>${inputCfg(`carico.${i}`,CONFIG_APPALTO.carico[i],'number','0.5')} h</td></tr>`).join('');
-  const ricevimento=GIORNI.map((g,i)=>`<tr><td>${g}</td><td>${inputCfg(`ricevimento.${i}`,CONFIG_APPALTO.ricevimento?.[i]||0,'number','0.5')} h</td></tr>`).join('');
-  return `<div class="card"><div class="ct">Configurazione appalto — standard settimanali</div>
-    <div class="fg"><label>Soglia produttività Ortofrutta</label><div>${inputCfg('sogliaProduttivita',CONFIG_APPALTO.sogliaProduttivita,'number','0.1')} colli/ora</div></div>
+  normalizzaFabbisogniCatalogo(CONFIG_EDITOR);
+  const carico=GIORNI.map((g,i)=>`<tr><td>${g}</td><td>${inputCfg(`carico.${i}`,CONFIG_EDITOR.carico[i],'number','0.5')} h</td></tr>`).join('');
+  const ricevimento=GIORNI.map((g,i)=>`<tr><td>${g}</td><td>${inputCfg(`ricevimento.${i}`,CONFIG_EDITOR.ricevimento?.[i]||0,'number','0.5')} h</td></tr>`).join('');
+  return `<div class="card"><div class="ct">Configurazione appalto</div><div class="fg"><label for="cfg-ambito">Configurazione da modificare</label><select id="cfg-ambito" onchange="apriConfigAppalto(this.value==='settimana')"><option value="settimana" ${CONFIG_EDITOR_LUNEDI?'selected':''}>Settimana dal ${fmtDataIt(APPALTO_LUNEDI)} al ${fmtDataIt(addGiorni(APPALTO_LUNEDI,6))}</option><option value="standard" ${CONFIG_EDITOR_LUNEDI?'':'selected'}>Standard per le nuove settimane</option></select></div>${CONFIG_EDITOR_LUNEDI&&!APPALTO_SETTIMANE[CONFIG_EDITOR_LUNEDI]?'<p class="cfg-note">Crea e salva prima questa settimana in Programmazione per personalizzare i fabbisogni.</p>':''}
+    <div class="fg"><label>Soglia produttività Ortofrutta</label><div>${inputCfg('sogliaProduttivita',CONFIG_EDITOR.sogliaProduttivita,'number','0.1')} colli/ora</div></div>
     <details class="cfg-section"><summary>Ortofrutta — budget fisso Ricevimento</summary><div class="cfg-body"><p class="cfg-note">Ore totali standard per giornata, indipendenti dai colli ricevuti. Il valore 0 lascia il budget da definire.</p><div class="tw"><table><thead><tr><th>Giorno</th><th>Ore standard</th></tr></thead><tbody>${ricevimento}</tbody></table></div></div></details>
     <details class="cfg-section" open><summary>Carico — ore totali giornaliere</summary><div class="cfg-body tw"><table><thead><tr><th>Giorno</th><th>Ore standard</th></tr></thead><tbody>${carico}</tbody></table></div></details>
     <details class="cfg-section"><summary>Fabbisogni per fasce di 30 minuti — Ceste, Forno, Vuoti e Grocery</summary><div class="cfg-body"><p class="cfg-note">Tutti e quattro i reparti funzionano nello stesso modo: imposta fascia e persone contemporaneamente necessarie. Una posizione può essere coperta da più persone in successione; gli ingressi sfalsati restano visibili nella griglia.</p><div class="fg" style="max-width:220px;margin-bottom:12px;"><label>Giorno da configurare</label><select id="cfg-fabb-giorno" onchange="cambiaGiornoFabb(this.value)">${GIORNI.map((g,i)=>`<option value="${i}" ${i===CFG_GIORNO_FABB?'selected':''}>${g}</option>`).join('')}</select></div><div id="cfg-fabbisogni-editor">${renderEditorFabbisogniHtml()}</div></div></details>
@@ -600,6 +623,8 @@ function fmtDataIt(dataStr){
 <!-- Le funzioni delle singole schermate (renderConfigTab, renderPrevisioneTab, renderProgrammazioneTab, renderControlloTab) vengono aggiunte di seguito -->
 <script>
 async function renderConfigTab(){
+  APPALTO_LUNEDI=APPALTO_LUNEDI||lunediProssimaSettimana();
+  apriConfigAppalto(true);
   const versioneTab=CASSANO_TAB_VERSIONE;
   document.getElementById('mc').innerHTML='<div class="loading">⏳ Caricamento...</div>';
   const{data:obiettivi,error:e1}=await sb.from('ObiettiviAttivitaOrtofrutta').select('*');
@@ -616,7 +641,7 @@ async function renderConfigTab(){
   const pctNavetta=parametri?.PercentualeNavetta??'';
 
   document.getElementById('mc').innerHTML=`
-  ${renderConfigAppaltoHtml()}
+  <div id="cfg-appalto">${renderConfigAppaltoHtml()}</div>
   ${renderConfigurazioneProgrammazioneCassano()}
   <div class="card">
     <div class="ct">Obiettivi di produttività</div>
@@ -983,7 +1008,7 @@ async function caricaStatoCassanoSupabase(){
   if(!catalogo.error)CATALOGO_PROGRAMMAZIONE_CASSANO=catalogo.data||[];
   if(!repartiPrincipali.error)REPARTI_PRINCIPALI_CASSANO=new Map((repartiPrincipali.data||[]).map(x=>[String(x.ID_Dipendente),Number(x.ID_Reparto)]));
   if((settimane.data||[]).length){
-    const remote={};(settimane.data||[]).forEach(s=>{APPALTO_VERSIONI_REMOTE.set(s.Lunedi,s.AggiornatoIl||null);remote[s.Lunedi]={stato:s.Stato,origine:s.OrigineLunedi?'Settimana copiata da '+s.OrigineLunedi:'Supabase',righe:[]};});
+    const remote={};(settimane.data||[]).forEach(s=>{APPALTO_VERSIONI_REMOTE.set(s.Lunedi,s.AggiornatoIl||null);remote[s.Lunedi]={stato:s.Stato,origine:s.OrigineLunedi?'Settimana copiata da '+s.OrigineLunedi:'Supabase',configurazione:s.Configurazione,righe:[]};});
     (turni.data||[]).forEach(t=>{const s=remote[t.Settimana];if(!s)return;s.righe.push({uid:t.UID,giorno:Number(t.GiornoIndice),nome:t.NomeOrigine||'',id_dipendente:t.ID_Dipendente,reparto:t.RepartoOrigine||'',id_reparto:t.ID_Reparto,attivita:t.AttivitaOrigine||'',id_attivita:t.ID_Attivita,id_catalogo_programmazione:t.ID_CatalogoProgrammazione||null,origine_nome:t.NomeOrigine||'',origine_reparto:t.RepartoOrigine||'',origine_attivita:t.AttivitaOrigine||'',inizio:t.OraInizio?String(t.OraInizio).slice(0,5):'',fine:t.OraFine?String(t.OraFine).slice(0,5):'',tipo:t.Tipo||'standard',sostituisce:t.UIDSostituito||undefined,note:t.Note||''});});
     Object.entries(remote).forEach(([lunedi,dati])=>{
       const bozza=APPALTO_BOZZE_META[lunedi];
@@ -1032,7 +1057,7 @@ async function sincronizzaSettimanaCassano(lunedi){
       if(turni.data.length)return{ok:false,messaggio:'I turni sono presenti ma la testata della settimana non è disponibile. Non creare altre copie.'};
       return{ok:true,presente:false};
     }
-    APPALTO_SETTIMANE[lunedi]={stato:testata.data.Stato,origine:testata.data.OrigineLunedi?'Settimana copiata da '+testata.data.OrigineLunedi:'Supabase',righe:turni.data.map(rigaPianificataDaSupabase)};
+    APPALTO_SETTIMANE[lunedi]={stato:testata.data.Stato,origine:testata.data.OrigineLunedi?'Settimana copiata da '+testata.data.OrigineLunedi:'Supabase',configurazione:testata.data.Configurazione,righe:turni.data.map(rigaPianificataDaSupabase)};
     APPALTO_VERSIONI_REMOTE.set(lunedi,testata.data.AggiornatoIl||null);
     APPALTO_BOZZE_META[lunedi]={...(APPALTO_BOZZE_META[lunedi]||{}),pending:false};
     normalizzaRighePlanner(APPALTO_SETTIMANE[lunedi]);
@@ -1064,7 +1089,7 @@ async function salvaSettimanaSupabaseBase(motivoStorico='salvataggio settimana',
     if(eStorico){statoSync('Salvataggio interrotto');toast('Copia di sicurezza nello storico non creata. Bozza mantenuta: '+eStorico.message,'err');return false;}
   }
   statoSync('Salvataggio settimana…');
-  const{error:e1}=await sb.from('SettimaneCassano').upsert({Lunedi:lunedi,ID_Magazzino:ID_MAGAZZINO_CASSANO,Stato:settimana.stato||'bozza',OrigineLunedi:origine,AggiornatoIl:ora,AggiornatoDa:utente},{onConflict:'Lunedi'});
+  const{error:e1}=await sb.from('SettimaneCassano').upsert({Lunedi:lunedi,ID_Magazzino:ID_MAGAZZINO_CASSANO,Stato:settimana.stato||'bozza',OrigineLunedi:origine,...(testataPrecedente?.Configurazione?{}:{Configurazione:settimana.configurazione||structuredClone(CONFIG_APPALTO)}),AggiornatoIl:ora,AggiornatoDa:utente},{onConflict:'Lunedi'});
   if(e1){statoSync('Errore di salvataggio');toast('Settimana non salvata: '+e1.message,'err');return false;}
   const righe=(settimana.righe||[]).map(r=>({UID:r.uid,Settimana:lunedi,GiornoIndice:Number(r.giorno),ID_Dipendente:r.id_dipendente?Number(r.id_dipendente):null,NomeOrigine:r.origine_nome||r.nome||null,ID_Reparto:r.id_reparto?Number(r.id_reparto):null,RepartoOrigine:r.origine_reparto||r.reparto||null,ID_Attivita:r.id_attivita?Number(r.id_attivita):null,ID_CatalogoProgrammazione:r.id_catalogo_programmazione||null,AttivitaOrigine:r.origine_attivita||r.attivita||null,OraInizio:r.inizio||null,OraFine:r.fine||null,Tipo:r.tipo||'standard',UIDSostituito:r.sostituisce||null,Note:r.note||null,AggiornatoIl:ora,AggiornatoDa:utente}));
   if(righe.length){const{error}=await sb.from('TurniCassanoPianificati').upsert(righe,{onConflict:'UID'});if(error){statoSync('Salvataggio parziale');toast('Testata salvata, ma turni non salvati: '+error.message,'err');return false;}}
@@ -1107,7 +1132,7 @@ async function ripristinaVersioneSettimana(idStorico){
   if(error||!data){toast('Versione non disponibile: '+(error?.message||'non trovata'),'err');return;}
   const dati=data.Dati||{},testata=dati.testata||{};
   if(!Array.isArray(dati.righe)){toast('La copia selezionata non contiene righe ripristinabili.','err');return;}
-  APPALTO_SETTIMANE[APPALTO_LUNEDI]={stato:testata.Stato||'bozza',origine:testata.OrigineLunedi?'Settimana copiata da '+testata.OrigineLunedi:'Ripristino storico',righe:dati.righe.map(rigaPianificataDaSupabase)};
+  APPALTO_SETTIMANE[APPALTO_LUNEDI]={stato:testata.Stato||'bozza',origine:testata.OrigineLunedi?'Settimana copiata da '+testata.OrigineLunedi:'Ripristino storico',configurazione:testata.Configurazione||configDellaSettimana(),righe:dati.righe.map(rigaPianificataDaSupabase)};
   normalizzaRighePlanner(APPALTO_SETTIMANE[APPALTO_LUNEDI]);salvaSettimaneAppalto();
   const ok=await salvaSettimanaSupabase('ripristino versione del '+new Date(data.SalvatoIl).toLocaleString('it-IT',{dateStyle:'short',timeStyle:'short'}));
   if(!ok)return;
@@ -1532,9 +1557,9 @@ function renderRiepilogoOrtofruttaAppalto(righeGiorno){
   const oreAtt=(id,nome)=>valide.filter(r=>rigaOrtofrutta(r)&&rigaAttivita(r,id,nome)).reduce((s,r)=>s+durataTurno(r),0);
   const oreVent=oreAtt(ID_ATTIVITA_VENTILAZIONE,'ventil'),oreRic=oreAtt(ID_ATTIVITA_RICEVIMENTO,'ricev'),oreLeg=oreAtt(ID_ATTIVITA_LEGAGGIO,'legagg'),oreNav=oreAtt(ID_ATTIVITA_NAVETTA,'navett');
   const obVent=APPALTO_OF_DATA.obiettivi[ID_ATTIVITA_VENTILAZIONE]||0,necessarieVent=colli!=null&&obVent>0?colli/obVent:null;
-  const budgetRic=Number(CONFIG_APPALTO.ricevimento?.[APPALTO_GIORNO])||null;
+  const budgetRic=Number(configDellaSettimana().ricevimento?.[APPALTO_GIORNO])||null;
   const budgetLeg=necessarieVent==null?null:necessarieVent*APPALTO_OF_DATA.percLegaggio/100,budgetNav=necessarieVent==null?null:necessarieVent*APPALTO_OF_DATA.percNavetta/100;
-  const oreReparto=valide.filter(r=>rigaOrtofrutta(r)).reduce((s,r)=>s+durataTurno(r),0),prod=colli!=null&&oreReparto>0?colli/oreReparto:null,soglia=Number(CONFIG_APPALTO.sogliaProduttivita)||115;
+  const oreReparto=valide.filter(r=>rigaOrtofrutta(r)).reduce((s,r)=>s+durataTurno(r),0),prod=colli!=null&&oreReparto>0?colli/oreReparto:null,soglia=Number(configDellaSettimana().sogliaProduttivita)||115;
   const cella=(budget,ore)=>{const p=budget>0?ore/budget*100:null,cls=p==null?'':p>=100?'pg':p>=80?'py':'pr';return `<td>${budget!=null?budget.toFixed(1)+' h':'—'}</td><td>${ore.toFixed(1)} h</td><td>${p!=null?`<span class="pill ${cls}">${p.toFixed(0)}%</span>`:'—'}</td>`;};
   el.innerHTML=`<details class="cfg-section" ${attributiPannelloAppalto('ortofrutta',APPALTO_REPARTO==='Tutti'||/orto|frutta/i.test(APPALTO_REPARTO))}><summary>Controllo Ortofrutta — ${fmtDataIt(data)}</summary><div class="cfg-body"><div class="tw"><table><thead><tr><th>Attività</th><th>Ore necessarie/budget</th><th>Ore programmate</th><th>Copertura</th></tr></thead><tbody><tr><td>Ventilazione pura</td>${cella(necessarieVent,oreVent)}</tr><tr><td>Ricevimento <small>(budget fisso giornaliero)</small></td>${cella(budgetRic,oreRic)}</tr><tr><td>Legaggio</td>${cella(budgetLeg,oreLeg)}</tr><tr><td>Navetta</td>${cella(budgetNav,oreNav)}</tr></tbody></table></div><p style="margin-top:10px;font-size:.82rem;">Produttività complessiva: ${prod!=null?`<span class="pill ${prod>=soglia?'pg':'pr'}">${prod.toFixed(1)} colli/ora</span> su soglia ${soglia}`:'—'}${colli==null?' · previsione colli non presente':''}</p></div></details>`;
 }
@@ -1557,7 +1582,7 @@ function righeValideCopertura(righe){return righe.filter(r=>r.inizio&&r.fine&&(r
 function intervalloProgrammatoControllo(r){const inizio=minutiOra(r.inizio);let fine=minutiOra(r.fine);if(fine<=inizio)fine+=1440;return{inizio,fine};}
 function calcolaCoperturaFasce(rep,righeSettimana){
   normalizzaFabbisogniCatalogo();
-  const fabb=CONFIG_APPALTO.fabbisogni?.[rep]?.[APPALTO_GIORNO]||[],unica=rep==='ceste'||rep==='forno';
+  const fabb=configDellaSettimana().fabbisogni?.[rep]?.[APPALTO_GIORNO]||[],unica=rep==='ceste'||rep==='forno';
   const turni=righeValideCopertura(righeSettimana).filter(r=>chiaveRepartoControllo(r)===rep&&Number(r.giorno)===APPALTO_GIORNO).map(r=>({...intervalloProgrammatoControllo(r),id_attivita:Number(r.id_attivita)||0,attivita:r.attivita}));
   const dettaglio=fabb.map(f=>{const x=intervalloFabbisogno(f),n=Math.max(0,Number(f.persone)||0);return{attivita:f.attivita,id_attivita:Number(f.id_attivita)||0,...x,necessarie:n,presentiMin:Infinity,presentiMax:0,oreNecessarie:(x.fine-x.inizio)/60*n,oreProgrammate:0,oreMancanti:0,oreAggiunte:0,mancaPersoneMax:0,extraPersoneMax:0};});
   const limiti=[...new Set([...dettaglio,...turni].flatMap(x=>[x.inizio,x.fine]))].sort((a,b)=>a-b),extra=[];
@@ -1619,7 +1644,7 @@ function chiaveAttivitaTimelineVuoti(r){
 }
 function renderTimelineVuoti(righeSettimana){
   normalizzaFabbisogniCatalogo();
-  const fabbisogni=(CONFIG_APPALTO.fabbisogni?.vuoti?.[APPALTO_GIORNO]||[]).filter(r=>r.inizio&&r.fine);
+  const fabbisogni=(configDellaSettimana().fabbisogni?.vuoti?.[APPALTO_GIORNO]||[]).filter(r=>r.inizio&&r.fine);
   const turni=righeValideCopertura(righeSettimana)
     .filter(r=>Number(r.giorno)===APPALTO_GIORNO&&chiaveRepartoControllo(r)==='vuoti'&&r.tipo!=='riposo')
     .map(r=>({...r,...intervalloProgrammatoControllo(r)}));
@@ -1678,7 +1703,7 @@ function htmlCoperturaFasce(esito,aperto,righeSettimana){
   const timeline=esito.rep==='vuoti'?renderTimelineVuoti(righeSettimana):'';
   return `<details class="cfg-section" ${attributiPannelloAppalto(esito.rep,aperto)}><summary>Controllo ${esito.titolo} — ${statoTitolo.join(' · ')}</summary><div class="cfg-body"><div class="tw"><table class="tabella-copertura"><thead><tr><th rowspan="2">Attività</th><th rowspan="2">Fascia</th><th colspan="3" class="gruppo-colonne">Persone</th><th colspan="3" class="gruppo-colonne">Ore-persona</th></tr><tr><th>Necessarie</th><th>Programmate</th><th>Stato</th><th>Necessarie</th><th>Programmate</th><th>Stato</th></tr></thead><tbody>${righe||'<tr><td colspan="8" class="empty">Nessun fabbisogno configurato per questa giornata.</td></tr>'}</tbody></table></div>${timeline}</div></details>`;
 }
-function calcolaControlloCarico(righeSettimana){const richieste=Number(CONFIG_APPALTO.carico?.[APPALTO_GIORNO])||0,programmate=righeValideCopertura(righeSettimana).filter(r=>r.giorno===APPALTO_GIORNO&&chiaveRepartoControllo(r)==='carico').reduce((s,r)=>s+durataTurno(r),0),mancanti=Math.max(0,richieste-programmate),aggiunte=Math.max(0,programmate-richieste);return{richieste,programmate,mancanti,aggiunte,completo:richieste>0&&mancanti<0.01&&aggiunte<0.01};}
+function calcolaControlloCarico(righeSettimana){const richieste=Number(configDellaSettimana().carico?.[APPALTO_GIORNO])||0,programmate=righeValideCopertura(righeSettimana).filter(r=>r.giorno===APPALTO_GIORNO&&chiaveRepartoControllo(r)==='carico').reduce((s,r)=>s+durataTurno(r),0),mancanti=Math.max(0,richieste-programmate),aggiunte=Math.max(0,programmate-richieste);return{richieste,programmate,mancanti,aggiunte,completo:richieste>0&&mancanti<0.01&&aggiunte<0.01};}
 function renderControlliRepartiAppalto(righeSettimana){
   const el=document.getElementById('appalto-controlli');if(!el)return;const esiti=Object.keys(CONTROLLO_REPARTI_FASCE).map(k=>calcolaCoperturaFasce(k,righeSettimana)),carico=calcolaControlloCarico(righeSettimana);
   const repartoSelezionato=REPARTI.find(r=>nomeReparto(r)===APPALTO_REPARTO),idRepartoSelezionato=Number(repartoSelezionato?.ID_Reparto)||0;
@@ -1843,7 +1868,7 @@ function calcolaCoperturaSettimanaleOrtofrutta(righeSettimana){
     const obVent=Number(APPALTO_OF_DATA.obiettivi[ID_ATTIVITA_VENTILAZIONE])||0,necessarieVent=colli!=null&&obVent>0?colli/obVent:null;
     const valori={
       ventilazione:{necessarie:necessarieVent,programmate:oreAtt(ID_ATTIVITA_VENTILAZIONE,'ventil')},
-      ricevimento:{necessarie:Number(CONFIG_APPALTO.ricevimento?.[g])||null,programmate:oreAtt(ID_ATTIVITA_RICEVIMENTO,'ricev')},
+      ricevimento:{necessarie:Number(configDellaSettimana().ricevimento?.[g])||null,programmate:oreAtt(ID_ATTIVITA_RICEVIMENTO,'ricev')},
       legaggio:{necessarie:necessarieVent==null?null:necessarieVent*(Number(APPALTO_OF_DATA.percLegaggio)||0)/100,programmate:oreAtt(ID_ATTIVITA_LEGAGGIO,'legagg')},
       navetta:{necessarie:necessarieVent==null?null:necessarieVent*(Number(APPALTO_OF_DATA.percNavetta)||0)/100,programmate:oreAtt(ID_ATTIVITA_NAVETTA,'navett')}
     };
@@ -2024,7 +2049,7 @@ async function creaDaSettimanaScelta(precedente,lunedi=APPALTO_LUNEDI){
   if(!base&&precedente==='2026-09-14'){importaPdfComeSettimana(precedente);base=APPALTO_SETTIMANE[precedente];}
   if(!base){toast('La settimana scelta non contiene una programmazione disponibile. Scegli un’altra settimana.','warn');return;}
   let seq=0;const righe=base.righe.filter(r=>r.tipo!=='sostituzione').map(r=>({...structuredClone(r),uid:(r.tipo==='riposo'?'riposo-':'std-')+Date.now()+'-'+seq++,tipo:r.tipo==='riposo'?'riposo':'standard',sostituisce:undefined}));
-  APPALTO_SETTIMANE[lunedi]={stato:'bozza',origine:'Settimana copiata da '+precedente,righe};salvaSettimaneAppalto();caricaSettimanaAppalto(lunedi);APPALTO_MSG='Settimana creata copiando quella del '+fmtDataIt(precedente)+'; le sostituzioni temporanee non sono state copiate.';renderCorpoAppalto();await controllaAssenzeAppalto();
+  APPALTO_SETTIMANE[lunedi]={stato:'bozza',origine:'Settimana copiata da '+precedente,configurazione:structuredClone(configDellaSettimana(precedente)),righe};salvaSettimaneAppalto();caricaSettimanaAppalto(lunedi);APPALTO_MSG='Settimana creata copiando quella del '+fmtDataIt(precedente)+'; le sostituzioni temporanee non sono state copiate.';renderCorpoAppalto();await controllaAssenzeAppalto();
   }catch(error){toast('Creazione non completata: '+(error?.message||error)+'. Eventuali modifiche locali sono mantenute.','err');}
   finally{APPALTO_CREAZIONI_IN_CORSO.delete(lunedi);}
 }
@@ -2297,7 +2322,7 @@ function renderRiepilogoGiorno(){
     return tot+r.turni.filter(t=>String(t.id_reparto)===String(ID_REPARTO_ORTOFRUTTA)).reduce((s,t)=>s+durataTurno(t),0);
   },0);
   const mediaReparto=(colliPrevisti!=null&&oreTotaliReparto>0)?(colliPrevisti/oreTotaliReparto):null;
-  const sogliaReparto=Number(CONFIG_APPALTO.sogliaProduttivita)||115;
+  const sogliaReparto=Number(configDellaSettimana().sogliaProduttivita)||115;
   const clsMedia=mediaReparto==null?'':(mediaReparto>=sogliaReparto?'pg':'pr');
 
   document.getElementById('prog-riepilogo').innerHTML=`
