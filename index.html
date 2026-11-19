@@ -1,5 +1,5 @@
 <!DOCTYPE html>
-<!-- build-pages: pdf-caratteri-regolabili-20261113 -->
+<!-- build-pages: catalogo-lavaggio-fabbisogni-20261119 -->
 <html lang="it">
 <head>
 <meta charset="UTF-8">
@@ -476,7 +476,8 @@ function normalizzaFabbisogniCatalogo(config=configDellaSettimana()){
   ['vuoti','grocery'].forEach(rep=>(config.fabbisogni?.[rep]||[]).forEach(giorno=>(giorno||[]).forEach(r=>{const a=collegaFabbisognoCatalogo(rep,r);if(a){r.id_attivita=Number(a.ID_Attivita);r.attivita=nomeAttivita(a);}})));
 }
 function opzioniAttivita(rep,r){
-  if(rep==='ceste'||rep==='forno')return `<option value="">${rep==='ceste'?'Lavaggio ceste':'Lavaggio forno'}</option>`;
+  if(rep==='forno')return '<option value="">Lavaggio forno</option>';
+  if(rep==='ceste'&&!r?.id_attivita&&r?.attivita==='Lavaggio ceste')return '<option value="" selected>Lavaggio ceste (fabbisogno complessivo)</option>'+attivitaFabbisognoCatalogo(rep).map(a=>`<option value="${a.ID_Attivita}">${testoHtmlAppalto(nomeAttivita(a))}</option>`).join('');
   const corrente=collegaFabbisognoCatalogo(rep,r),id=corrente?String(corrente.ID_Attivita):'';
   const nonCollegata=!id&&r?.attivita?`<option value="" selected>${testoHtmlAppalto(r.attivita)} — da collegare</option>`:`<option value="" ${id?'':'selected'}>Scegli attività…</option>`;
   return `${nonCollegata}${attivitaFabbisognoCatalogo(rep).map(a=>`<option value="${a.ID_Attivita}" ${String(a.ID_Attivita)===id?'selected':''}>${testoHtmlAppalto(nomeAttivita(a))}</option>`).join('')}`;
@@ -505,7 +506,7 @@ function grigliaMezzOreHtml(rep){
 function editorRepartoHtml(rep,titolo){return `<div class="card" style="box-shadow:none;margin:10px 0;"><div class="ct">${titolo}</div><div class="tw"><table><thead><tr><th>Attività</th><th>Dalle</th><th>Alle</th><th>Persone contemporanee</th><th>Ore richieste</th><th></th></tr></thead><tbody>${righeFabbisognoHtml(rep)}</tbody></table></div><div class="brow"><button class="btn bo bsm" onclick="aggiungiFascia('${rep}')">＋ Aggiungi fascia</button><button class="btn bo bsm" onclick="aggiornaAnteprimaFabbisogni()">↻ Aggiorna anteprima</button><button class="btn bo bsm" onclick="copiaFabbisognoSettimana('${rep}')">Copia questo giorno su tutta la settimana</button><button class="btn bo bsm" onclick="copiaFabbisognoGiorniSelezionati('${rep}')">Copia questo giorno sui giorni selezionati</button></div><fieldset class="cfg-copy-days"><legend>Giorni su cui copiare le fasce di ${titolo}</legend><div>${GIORNI.map((g,i)=>`<label><input type="checkbox" data-fabb-copia="${rep}" value="${i}" ${i===CFG_GIORNO_FABB?'disabled':''}><span>${g}${i===CFG_GIORNO_FABB?' (giorno di origine)':''}</span></label>`).join('')}</div></fieldset><p class="cfg-note" style="margin-top:14px;">Anteprima automatica del fabbisogno ogni 30 minuti</p>${grigliaMezzOreHtml(rep)}</div>`;}
 function renderEditorFabbisogniHtml(){return `${editorRepartoHtml('ceste','Lavaggio ceste')}${editorRepartoHtml('forno','Lavaggio forno')}${editorRepartoHtml('vuoti','Vuoti')}${editorRepartoHtml('grocery','Grocery')}`;}
 function aggiornaFabbisogniDaDom(){
-  ['ceste','forno','vuoti','grocery'].forEach(rep=>{const nodi=[...document.querySelectorAll(`[data-fabb-riga][data-rep="${rep}"]`)];if(!nodi.length)return;CONFIG_EDITOR.fabbisogni[rep][CFG_GIORNO_FABB]=nodi.map(tr=>{const get=c=>tr.querySelector(`[data-campo="${c}"]`).value,idAttivita=Number(get('attivita'))||null,a=idAttivita?trovaAttivita(idAttivita):null;return{attivita:rep==='ceste'?'Lavaggio ceste':rep==='forno'?'Lavaggio forno':a?nomeAttivita(a):'',id_attivita:idAttivita,inizio:get('inizio'),fine:get('fine'),persone:Number(get('persone'))||1};});});
+  ['ceste','forno','vuoti','grocery'].forEach(rep=>{const nodi=[...document.querySelectorAll(`[data-fabb-riga][data-rep="${rep}"]`)];if(!nodi.length)return;CONFIG_EDITOR.fabbisogni[rep][CFG_GIORNO_FABB]=nodi.map(tr=>{const get=c=>tr.querySelector(`[data-campo="${c}"]`).value,idAttivita=Number(get('attivita'))||null,a=idAttivita?trovaAttivita(idAttivita):null;return{attivita:rep==='forno'?'Lavaggio forno':a?nomeAttivita(a):rep==='ceste'?'Lavaggio ceste':'',id_attivita:idAttivita,inizio:get('inizio'),fine:get('fine'),persone:Number(get('persone'))||1};});});
 }
 function cambiaGiornoFabb(v){aggiornaFabbisogniDaDom();CFG_GIORNO_FABB=Number(v);document.getElementById('cfg-fabbisogni-editor').innerHTML=renderEditorFabbisogniHtml();}
 function aggiornaAnteprimaFabbisogni(){aggiornaFabbisogniDaDom();document.getElementById('cfg-fabbisogni-editor').innerHTML=renderEditorFabbisogniHtml();}
