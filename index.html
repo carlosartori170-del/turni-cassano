@@ -1,5 +1,5 @@
 <!DOCTYPE html>
-<!-- build-pages: catalogo-lavaggio-fabbisogni-20261119 -->
+<!-- build-pages: due-attivita-lavaggio-20261119 -->
 <html lang="it">
 <head>
 <meta charset="UTF-8">
@@ -477,7 +477,13 @@ function normalizzaFabbisogniCatalogo(config=configDellaSettimana()){
 }
 function opzioniAttivita(rep,r){
   if(rep==='forno')return '<option value="">Lavaggio forno</option>';
-  if(rep==='ceste'&&!r?.id_attivita&&r?.attivita==='Lavaggio ceste')return '<option value="" selected>Lavaggio ceste (fabbisogno complessivo)</option>'+attivitaFabbisognoCatalogo(rep).map(a=>`<option value="${a.ID_Attivita}">${testoHtmlAppalto(nomeAttivita(a))}</option>`).join('');
+  if(rep==='ceste'){
+    const catalogo=attivitaFabbisognoCatalogo(rep),ceste=catalogo.find(a=>nomeCatalogoSenzaPrefisso(nomeAttivita(a))==='ceste'),macchina=catalogo.find(a=>nomeCatalogoSenzaPrefisso(nomeAttivita(a))==='lavaggio macchina');
+    const corrente=collegaFabbisognoCatalogo(rep,r),id=corrente?String(corrente.ID_Attivita):'',legacy=!r?.id_attivita&&r?.attivita==='Lavaggio ceste';
+    const voci=[{a:ceste,nome:'Lavaggio ceste'},{a:macchina,nome:'Lavaggio macchina'}].filter(v=>v.a);
+    const extra=!legacy&&!voci.some(v=>String(v.a.ID_Attivita)===id)&&r?.attivita?`<option value="${id}" selected disabled>${testoHtmlAppalto(r.attivita)} — scegli una delle due attività</option>`:'';
+    return extra+voci.map(v=>`<option value="${v.a.ID_Attivita}" ${String(v.a.ID_Attivita)===id||(legacy&&v.a===ceste)?'selected':''}>${v.nome}</option>`).join('');
+  }
   const corrente=collegaFabbisognoCatalogo(rep,r),id=corrente?String(corrente.ID_Attivita):'';
   const nonCollegata=!id&&r?.attivita?`<option value="" selected>${testoHtmlAppalto(r.attivita)} — da collegare</option>`:`<option value="" ${id?'':'selected'}>Scegli attività…</option>`;
   return `${nonCollegata}${attivitaFabbisognoCatalogo(rep).map(a=>`<option value="${a.ID_Attivita}" ${String(a.ID_Attivita)===id?'selected':''}>${testoHtmlAppalto(nomeAttivita(a))}</option>`).join('')}`;
