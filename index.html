@@ -939,13 +939,14 @@ function salvaSettimaneAppalto(opzioni={}){
   const attuale=JSON.stringify(APPALTO_SETTIMANE),modificata=precedente!==attuale&&!opzioni.silenzioso;
   if(modificata){
     try{if(precedente!==null)APPALTO_UNDO.push(JSON.parse(precedente));if(APPALTO_UNDO.length>20)APPALTO_UNDO.shift();}catch(_){}
-    if(APPALTO_LUNEDI)APPALTO_BOZZE_META[APPALTO_LUNEDI]={...(APPALTO_BOZZE_META[APPALTO_LUNEDI]||{}),modificatoIl:new Date().toISOString(),pending:true};
+    const lunediModificato=opzioni.lunedi||APPALTO_LUNEDI;
+    if(lunediModificato)APPALTO_BOZZE_META[lunediModificato]={...(APPALTO_BOZZE_META[lunediModificato]||{}),modificatoIl:new Date().toISOString(),pending:true};
   }
   // Bozza e stato pendente hanno precedenza sulle copie per Annulla modifica.
   const metaOk=scriviLocaleAppalto(APPALTO_BOZZE_META_KEY,JSON.stringify(APPALTO_BOZZE_META));
   const bozzaOk=scriviLocaleAppalto(APPALTO_STORAGE_KEY,attuale);
-  if(modificata){
-    scriviLocaleAppalto(APPALTO_UNDO_KEY,()=>JSON.stringify(APPALTO_UNDO));
+  if(modificata) scriviLocaleAppalto(APPALTO_UNDO_KEY,()=>JSON.stringify(APPALTO_UNDO));
+  if(modificata&&(!opzioni.lunedi||opzioni.lunedi===APPALTO_LUNEDI)){
     aggiornaStatoAutosaveAppalto(metaOk&&bozzaOk?'Bozza salvata su questo computer · salvataggio automatico tra pochi secondi':'Memoria locale non disponibile · modifica visibile, salvataggio su Supabase in attesa. Mantieni aperta la pagina.');
     programmaSalvataggioAutomaticoAppalto();
   }
@@ -2016,7 +2017,7 @@ function renderCorpoAppalto(){
   aggiornaComandiReplica();
 }
 function chiudiSceltaSettimanaOrigine(){const pannello=document.getElementById('appalto-copia-settimana');if(pannello){pannello.hidden=true;pannello.innerHTML='';}}
-function apriSceltaSettimanaOrigine(){const destinazione=APPALTO_LUNEDI;if(!destinazione){toast('Seleziona prima la settimana da programmare.','warn');return;}if(APPALTO_SETTIMANE[destinazione]){caricaSettimanaAppalto(destinazione);toast('Questa settimana è già programmata: non verrà sovrascritta.','warn');return;}const pannello=document.getElementById('appalto-copia-settimana');if(!pannello)return;const settimane=Object.keys(APPALTO_SETTIMANE).filter(l=>l!==destinazione&&/^\d{4}-\d{2}-\d{2}$/.test(l)).sort().reverse();pannello.dataset.destinazione=destinazione;pannello.hidden=false;pannello.innerHTML=`<div class="ct">Crea la settimana dal ${fmtDataIt(destinazione)} al ${fmtDataIt(addGiorni(destinazione,6))}</div><p class="cfg-note">Scegli la settimana da copiare. La settimana di origine resta invariata; le sostituzioni temporanee non vengono copiate.</p><div class="g2"><div class="fg"><label for="appalto-copia-origine-elenco">Settimane disponibili</label><select id="appalto-copia-origine-elenco" onchange="if(this.value)document.getElementById('appalto-copia-origine').value=this.value"><option value="">Scegli dall’elenco…</option>${settimane.map(l=>`<option value="${l}">Dal ${fmtDataIt(l)} al ${fmtDataIt(addGiorni(l,6))}</option>`).join('')}</select></div><div class="fg"><label for="appalto-copia-origine">Oppure indica una data della settimana da copiare</label><input type="date" id="appalto-copia-origine" onchange="document.getElementById('appalto-copia-origine-elenco').value=this.value"></div></div><div class="brow"><button type="button" class="btn bp bsm" id="appalto-copia-conferma" onclick="confermaSettimanaOrigine()">Copia nella settimana aperta</button><button type="button" class="btn bo bsm" onclick="chiudiSceltaSettimanaOrigine()">Annulla</button></div>`;pannello.scrollIntoView({block:'nearest',behavior:'smooth'});}
+function apriSceltaSettimanaOrigine(){const destinazione=APPALTO_LUNEDI;if(!destinazione){toast('Seleziona prima la settimana da programmare.','warn');return;}if(APPALTO_SETTIMANE[destinazione]){caricaSettimanaAppalto(destinazione);toast('Questa settimana è già programmata: non verrà sovrascritta.','warn');return;}const pannello=document.getElementById('appalto-copia-settimana');if(!pannello)return;const settimane=Object.keys(APPALTO_SETTIMANE).filter(l=>l!==destinazione&&/^\d{4}-\d{2}-\d{2}$/.test(l)).sort().reverse();pannello.dataset.destinazione=destinazione;pannello.hidden=false;pannello.innerHTML=`<div class="ct">Crea la settimana dal ${fmtDataIt(destinazione)} al ${fmtDataIt(addGiorni(destinazione,6))}</div><p class="cfg-note">Scegli la settimana da copiare. Vengono copiati anche i colli previsti Ortofrutta nei giorni in cui sono presenti. Eventuali previsioni di destinazione in quei giorni vengono sostituite. Le sostituzioni temporanee sono escluse.</p><div class="g2"><div class="fg"><label for="appalto-copia-origine-elenco">Settimane disponibili</label><select id="appalto-copia-origine-elenco" onchange="if(this.value)document.getElementById('appalto-copia-origine').value=this.value"><option value="">Scegli dall’elenco…</option>${settimane.map(l=>`<option value="${l}">Dal ${fmtDataIt(l)} al ${fmtDataIt(addGiorni(l,6))}</option>`).join('')}</select></div><div class="fg"><label for="appalto-copia-origine">Oppure indica una data della settimana da copiare</label><input type="date" id="appalto-copia-origine" onchange="document.getElementById('appalto-copia-origine-elenco').value=this.value"></div></div><div class="brow"><button type="button" class="btn bp bsm" id="appalto-copia-conferma" onclick="confermaSettimanaOrigine()">Copia nella settimana aperta</button><button type="button" class="btn bo bsm" onclick="chiudiSceltaSettimanaOrigine()">Annulla</button></div>`;pannello.scrollIntoView({block:'nearest',behavior:'smooth'});}
 async function confermaSettimanaOrigine(){const pannello=document.getElementById('appalto-copia-settimana'),data=document.getElementById('appalto-copia-origine')?.value,destinazione=pannello?.dataset.destinazione;if(!data||!/^\d{4}-\d{2}-\d{2}$/.test(data)||!Number.isFinite(dataUtc(data).getTime())||dataUtc(data).toISOString().slice(0,10)!==data){toast('Seleziona la settimana da copiare.','warn');return;}if(destinazione!==APPALTO_LUNEDI){chiudiSceltaSettimanaOrigine();toast('La settimana aperta è cambiata. Riapri la scelta della settimana di origine.','warn');return;}const origine=lunediSettimana(data);if(origine===destinazione){toast('Scegli una settimana di origine diversa da quella aperta.','warn');return;}if(!confirm(`Copiare la settimana dal ${fmtDataIt(origine)} al ${fmtDataIt(addGiorni(origine,6))} nella settimana dal ${fmtDataIt(destinazione)} al ${fmtDataIt(addGiorni(destinazione,6))}?`))return;const bottone=document.getElementById('appalto-copia-conferma');if(bottone)bottone.disabled=true;try{await creaDaSettimanaScelta(origine,destinazione);}finally{if(bottone)bottone.disabled=false;}}
 async function creaDaSettimanaScelta(precedente,lunedi=APPALTO_LUNEDI){
   if(!/^\d{4}-\d{2}-\d{2}$/.test(precedente||'')||!Number.isFinite(dataUtc(precedente).getTime())||dataUtc(precedente).toISOString().slice(0,10)!==precedente||lunediSettimana(precedente)!==precedente||precedente===lunedi){toast('Settimana di origine non valida.','warn');return;}
@@ -2048,8 +2049,22 @@ async function creaDaSettimanaScelta(precedente,lunedi=APPALTO_LUNEDI){
   }
   if(!base&&precedente==='2026-09-14'){importaPdfComeSettimana(precedente);base=APPALTO_SETTIMANE[precedente];}
   if(!base){toast('La settimana scelta non contiene una programmazione disponibile. Scegli un’altra settimana.','warn');return;}
+  const giorniOrigine=Array.from({length:7},(_,i)=>addGiorni(precedente,i));
+  const {data:previsioni,error:errorePrevisioni}=await sb.from('PrevisioneColliOrtofrutta')
+    .select('Data,ColliPrevisti').in('Data',giorniOrigine);
+  if(errorePrevisioni)throw Error('Previsioni Ortofrutta non lette: '+errorePrevisioni.message);
+  if(APPALTO_LUNEDI!==lunedi||APPALTO_SETTIMANE[lunedi]){toast('La destinazione è cambiata: copia annullata.','warn');return;}
+  const colliPerData=new Map((previsioni||[]).map(r=>[r.Data,r.ColliPrevisti]));
+  const colliDaCopiare=giorniOrigine.flatMap((data,i)=>colliPerData.get(data)==null?[]:[
+    {Data:addGiorni(lunedi,i),ColliPrevisti:colliPerData.get(data)}
+  ]);
+  if(colliDaCopiare.length){
+    const {error}=await sb.from('PrevisioneColliOrtofrutta').upsert(colliDaCopiare,{onConflict:'Data',defaultToNull:false});
+    if(error)throw Error('Previsioni Ortofrutta non copiate: '+error.message);
+  }
+  if(APPALTO_SETTIMANE[lunedi]){toast('La settimana esiste già. Le previsioni Ortofrutta sono state copiate.','warn');return;}
   let seq=0;const righe=base.righe.filter(r=>r.tipo!=='sostituzione').map(r=>({...structuredClone(r),uid:(r.tipo==='riposo'?'riposo-':'std-')+Date.now()+'-'+seq++,tipo:r.tipo==='riposo'?'riposo':'standard',sostituisce:undefined}));
-  APPALTO_SETTIMANE[lunedi]={stato:'bozza',origine:'Settimana copiata da '+precedente,configurazione:structuredClone(configDellaSettimana(precedente)),righe};salvaSettimaneAppalto();caricaSettimanaAppalto(lunedi);APPALTO_MSG='Settimana creata copiando quella del '+fmtDataIt(precedente)+'; le sostituzioni temporanee non sono state copiate.';renderCorpoAppalto();await controllaAssenzeAppalto();
+  APPALTO_SETTIMANE[lunedi]={stato:'bozza',origine:'Settimana copiata da '+precedente,configurazione:structuredClone(configDellaSettimana(precedente)),righe};salvaSettimaneAppalto({lunedi});if(APPALTO_LUNEDI!==lunedi||CASSANO_TAB_ATTIVA!=='appalto')return;caricaSettimanaAppalto(lunedi);APPALTO_MSG='Settimana creata copiando quella del '+fmtDataIt(precedente)+'; le sostituzioni temporanee non sono state copiate.';renderCorpoAppalto();await controllaAssenzeAppalto();
   }catch(error){toast('Creazione non completata: '+(error?.message||error)+'. Eventuali modifiche locali sono mantenute.','err');}
   finally{APPALTO_CREAZIONI_IN_CORSO.delete(lunedi);}
 }
